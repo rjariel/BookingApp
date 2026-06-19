@@ -9,6 +9,7 @@ import {
   pgTable,
   text,
   timestamp,
+  unique,
   uuid,
 } from 'drizzle-orm/pg-core';
 
@@ -21,6 +22,22 @@ import {
 // ── Enums ──────────────────────────────────────────────────────────────
 // `client` is included now so adding self-service login later needs no enum migration.
 export const userRole = pgEnum('user_role', ['admin', 'staff', 'client']);
+export const moduleSlug = pgEnum('module_slug', [
+  'dashboard',
+  'bookings',
+  'inventory',
+  'packages',
+  'addons',
+  'payment_modes',
+  'expense_types',
+  'expenses',
+  'cashflow',
+  'settings',
+  'activity_log',
+  'employees',
+  'duty',
+]);
+export const salaryType = pgEnum('salary_type', ['monthly', 'daily', 'hourly']);
 export const bookingStatus = pgEnum('booking_status', [
   'pending',
   'confirmed',
@@ -44,15 +61,56 @@ const timestamps = {
     .$onUpdate(() => new Date()),
 };
 
+// ── Roles (RBAC) ──────────────────────────────────────────────────────
+export const roles = pgTable('roles', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull().unique(),
+  slug: text('slug').notNull().unique(),
+  description: text('description'),
+  /** Ties this role to the admin/staff/client tier for auth guards. */
+  baseRole: userRole('base_role').notNull().default('staff'),
+  /** System roles (Administrator, Staff, Client) cannot be deleted. */
+  isSystem: boolean('is_system').notNull().default(false),
+  /** Hex color for the badge, e.g. "#6366f1". */
+  color: text('color').notNull().default('#6b7280'),
+  ...timestamps,
+});
+
+export const rolePermissions = pgTable(
+  'role_permissions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    roleId: uuid('role_id')
+      .notNull()
+      .references(() => roles.id, { onDelete: 'cascade' }),
+    module: moduleSlug('module').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [unique().on(t.roleId, t.module)],
+);
+
 // ── Identity ───────────────────────────────────────────────────────────
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
   email: text('email').notNull().unique(),
+  username: text('username').unique(),
   passwordHash: text('password_hash').notNull(),
   name: text('name'),
   role: userRole('role').notNull().default('staff'),
+  /** FK to roles table; null means use base role defaults. */
+  roleId: uuid('role_id').references(() => roles.id, { onDelete: 'set null' }),
   active: boolean('active').notNull().default(true),
   ...timestamps,
+});
+
+/** @deprecated — replaced by role_permissions. Kept for safe migration. */
+export const userPermissions = pgTable('user_permissions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  module: moduleSlug('module').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
 export const clients = pgTable('clients', {
@@ -88,12 +146,36 @@ export const packages = pgTable('packages', {
   ...timestamps,
 });
 
+export const packageItems = pgTable('package_items', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  packageId: uuid('package_id')
+    .notNull()
+    .references(() => packages.id, { onDelete: 'cascade' }),
+  itemId: uuid('item_id')
+    .notNull()
+    .references(() => inventoryItems.id, { onDelete: 'restrict' }),
+  qty: integer('qty').notNull().default(1),
+  ...timestamps,
+});
+
 export const addons = pgTable('addons', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
   price: numeric('price', { precision: 10, scale: 2 }).notNull().default('0'),
+  // NULL = global add-on; set = custom add-on for that package
+  packageId: uuid('package_id').references(() => packages.id, { onDelete: 'cascade' }),
   active: boolean('active').notNull().default(true),
   ...timestamps,
+});
+
+export const packageAddons = pgTable('package_addons', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  packageId: uuid('package_id')
+    .notNull()
+    .references(() => packages.id, { onDelete: 'cascade' }),
+  addonId: uuid('addon_id')
+    .notNull()
+    .references(() => addons.id, { onDelete: 'cascade' }),
 });
 
 export const paymentModes = pgTable('payment_modes', {
@@ -193,6 +275,46 @@ export const stockLedger = pgTable('stock_ledger', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
+// ── Cash Flow ─────────────────────────────────────────────────────────
+// One report per staff per day — their EOD cash count.
+export const cashReports = pgTable('cash_reports', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  date: date('date').notNull(),
+  staffId: uuid('staff_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'restrict' }),
+  amountReported: numeric('amount_reported', { precision: 10, scale: 2 }).notNull(),
+  notes: text('notes'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
+});
+
+// Cash leaving the studio (bank deposit, owner withdrawal, etc.) — admin only.
+export const cashWithdrawals = pgTable('cash_withdrawals', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  date: date('date').notNull(),
+  amount: numeric('amount', { precision: 10, scale: 2 }).notNull(),
+  withdrawnBy: uuid('withdrawn_by').references(() => users.id, { onDelete: 'set null' }),
+  reason: text('reason').notNull(),
+  notes: text('notes'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+// ── Auth tokens ───────────────────────────────────────────────────────
+export const passwordResetTokens = pgTable('password_reset_tokens', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  token: text('token').notNull().unique(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  usedAt: timestamp('used_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
 // ── Audit ──────────────────────────────────────────────────────────────
 export const activityLog = pgTable('activity_log', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -204,9 +326,84 @@ export const activityLog = pgTable('activity_log', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
+/**
+ * Global store settings — always a single row (upsert on save).
+ * open_time / close_time stored as "HH:MM" (24h, local studio time).
+ */
+export const storeSettings = pgTable('store_settings', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  studioName: text('studio_name').notNull().default('My Studio'),
+  logoUrl: text('logo_url'), // base64 data URL or remote URL
+  openTime: text('open_time').notNull().default('09:00'),
+  closeTime: text('close_time').notNull().default('18:00'),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
+});
+
+export type StoreSettings = typeof storeSettings.$inferSelect;
+
+// ── Employees ──────────────────────────────────────────────────────────
+// One-to-one extension of users for staff HR/salary info.
+export const employeeProfiles = pgTable('employee_profiles', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id')
+    .notNull()
+    .unique()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  firstName: text('first_name'),
+  lastName: text('last_name'),
+  photo: text('photo'), // base64 data URL or remote URL
+  position: text('position'),
+  details: text('details'), // general info visible to all
+  salary: numeric('salary', { precision: 10, scale: 2 }),
+  salaryType: salaryType('salary_type').default('monthly'),
+  hireDate: date('hire_date'),
+  notes: text('notes'), // admin-only internal notes
+  ...timestamps,
+});
+
+// ── Daily duty ─────────────────────────────────────────────────────────
+// Who is on duty for a given day. Staff adds self; admin can update.
+export const dailyDuty = pgTable(
+  'daily_duty',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    date: date('date').notNull(),
+    notes: text('notes'),
+    updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+    ...timestamps,
+  },
+  (t) => [unique('uq_duty_user_date').on(t.userId, t.date)],
+);
+
+export type EmployeeProfile = typeof employeeProfiles.$inferSelect;
+export type NewEmployeeProfile = typeof employeeProfiles.$inferInsert;
+export type DailyDuty = typeof dailyDuty.$inferSelect;
+export type NewDailyDuty = typeof dailyDuty.$inferInsert;
+
 // ── Relations (query builder) ──────────────────────────────────────────
-export const usersRelations = relations(users, ({ many }) => ({
+export const rolesRelations = relations(roles, ({ many }) => ({
+  assignedUsers: many(users),
+  permissions: many(rolePermissions),
+}));
+
+export const rolePermissionsRelations = relations(rolePermissions, ({ one }) => ({
+  role: one(roles, { fields: [rolePermissions.roleId], references: [roles.id] }),
+}));
+
+export const usersRelations = relations(users, ({ one, many }) => ({
+  assignedRole: one(roles, { fields: [users.roleId], references: [roles.id] }),
   bookingsCreated: many(bookings),
+  permissions: many(userPermissions),
+}));
+
+export const userPermissionsRelations = relations(userPermissions, ({ one }) => ({
+  user: one(users, { fields: [userPermissions.userId], references: [users.id] }),
 }));
 
 export const clientsRelations = relations(clients, ({ one, many }) => ({
@@ -236,10 +433,98 @@ export const bookingItemsRelations = relations(bookingItems, ({ one }) => ({
   item: one(inventoryItems, { fields: [bookingItems.itemId], references: [inventoryItems.id] }),
 }));
 
+export const packageItemsRelations = relations(packageItems, ({ one }) => ({
+  package: one(packages, { fields: [packageItems.packageId], references: [packages.id] }),
+  item: one(inventoryItems, { fields: [packageItems.itemId], references: [inventoryItems.id] }),
+}));
+
+export const packagesRelations = relations(packages, ({ many }) => ({
+  items: many(packageItems),
+  addons: many(packageAddons),
+  customAddons: many(addons),
+}));
+
+export const addonsRelations = relations(addons, ({ one, many }) => ({
+  package: one(packages, { fields: [addons.packageId], references: [packages.id] }),
+  packageLinks: many(packageAddons),
+}));
+
+export const packageAddonsRelations = relations(packageAddons, ({ one }) => ({
+  package: one(packages, { fields: [packageAddons.packageId], references: [packages.id] }),
+  addon: one(addons, { fields: [packageAddons.addonId], references: [addons.id] }),
+}));
+
+export const cashReportsRelations = relations(cashReports, ({ one }) => ({
+  staff: one(users, { fields: [cashReports.staffId], references: [users.id] }),
+}));
+
+export const cashWithdrawalsRelations = relations(cashWithdrawals, ({ one }) => ({
+  withdrawnByUser: one(users, { fields: [cashWithdrawals.withdrawnBy], references: [users.id] }),
+}));
+
+export const employeeProfilesRelations = relations(employeeProfiles, ({ one }) => ({
+  user: one(users, { fields: [employeeProfiles.userId], references: [users.id] }),
+}));
+
+export const dailyDutyRelations = relations(dailyDuty, ({ one }) => ({
+  user: one(users, { fields: [dailyDuty.userId], references: [users.id] }),
+  updatedByUser: one(users, { fields: [dailyDuty.updatedBy], references: [users.id] }),
+}));
+
 // ── Inferred types ─────────────────────────────────────────────────────
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
+export type UserPermission = typeof userPermissions.$inferSelect;
 export type Booking = typeof bookings.$inferSelect;
 export type NewBooking = typeof bookings.$inferInsert;
 export type Client = typeof clients.$inferSelect;
 export type InventoryItem = typeof inventoryItems.$inferSelect;
+export type Package = typeof packages.$inferSelect;
+export type NewPackage = typeof packages.$inferInsert;
+export type PackageItem = typeof packageItems.$inferSelect;
+export type NewPackageItem = typeof packageItems.$inferInsert;
+export type Addon = typeof addons.$inferSelect;
+export type NewAddon = typeof addons.$inferInsert;
+export type PackageAddon = typeof packageAddons.$inferSelect;
+export type NewPackageAddon = typeof packageAddons.$inferInsert;
+
+// Module list for permissions (matches moduleSlug enum)
+export const ALL_MODULES = [
+  'dashboard',
+  'bookings',
+  'inventory',
+  'packages',
+  'addons',
+  'payment_modes',
+  'expense_types',
+  'expenses',
+  'cashflow',
+  'settings',
+  'activity_log',
+  'employees',
+  'duty',
+] as const;
+
+export const MODULE_LABELS: Record<(typeof ALL_MODULES)[number], string> = {
+  dashboard: '📊 Dashboard',
+  bookings: '📅 Bookings',
+  inventory: '📦 Inventory',
+  packages: '🎁 Packages',
+  addons: '⭐ Add-ons',
+  payment_modes: '💳 Payment Modes',
+  expense_types: '🏷️ Expense Types',
+  expenses: '💰 Expenses',
+  cashflow: '💵 Cash Flow',
+  settings: '⚙️ Settings',
+  activity_log: '📋 Activity Log',
+  employees: '👥 Employees',
+  duty: '🗓️ Duty',
+};
+
+export type CashReport = typeof cashReports.$inferSelect;
+export type NewCashReport = typeof cashReports.$inferInsert;
+export type CashWithdrawal = typeof cashWithdrawals.$inferSelect;
+
+export type Role = typeof roles.$inferSelect;
+export type NewRole = typeof roles.$inferInsert;
+export type RolePermission = typeof rolePermissions.$inferSelect;

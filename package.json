@@ -16,16 +16,22 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "create-admin": "tsx --env-file=.env scripts/create-admin.ts",
+    "create-user": "tsx --env-file=.env scripts/create-user.ts",
+    "set-role": "tsx --env-file=.env scripts/set-role.ts",
+    "clear-bookings": "tsx --env-file=.env scripts/clear-bookings.ts"
   },
   "dependencies": {
-    "@neondatabase/serverless": "^1.1.0",
+    "@node-rs/argon2": "^2.0.2",
     "drizzle-orm": "^0.45.2",
     "geist": "^1.7.2",
     "next": "16.2.9",
     "next-auth": "^5.0.0-beta.31",
+    "postgres": "^3.4.9",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "resend": "^4.8.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

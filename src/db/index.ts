@@ -1,15 +1,15 @@
 import 'server-only';
-import { neon } from '@neondatabase/serverless';
-import { drizzle } from 'drizzle-orm/neon-http';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
 import * as schema from '@/db/schema';
 import { env } from '@/env';
 
 /**
- * Drizzle client over Neon's HTTP driver — ideal for serverless/edge reads
- * and single-statement writes. For multi-statement transactions in later
- * phases, switch to the WebSocket Pool driver (`drizzle-orm/neon-serverless`).
+ * Drizzle client over native Postgres driver (TCP).
+ * Supports transactions for multi-step mutations (bookings, inventory, payments).
+ * Slight cold-start overhead (~200-500ms) vs HTTP driver, but worth it for atomicity.
  */
-const sql = neon(env.DATABASE_URL);
+const client = postgres(env.DATABASE_URL);
 
-export const db = drizzle(sql, { schema });
+export const db = drizzle(client, { schema });
 export type Database = typeof db;

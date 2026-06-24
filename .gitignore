@@ -1,5 +1,8 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
+# playwright auth state (contains session tokens — never commit)
+/e2e/.auth/
+
 # dependencies
 /node_modules
 /.pnp

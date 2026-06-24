@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@node-rs/argon2": "^2.0.2",
+    "date-fns": "^4.4.0",
     "drizzle-orm": "^0.45.2",
     "geist": "^1.7.2",
     "next": "16.2.9",
@@ -31,6 +32,7 @@
     "postgres": "^3.4.9",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "recharts": "^3.8.1",
     "resend": "^4.8.0",
     "zod": "^4.4.3"
   },

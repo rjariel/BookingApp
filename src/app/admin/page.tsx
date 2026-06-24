@@ -81,7 +81,7 @@ export default async function AdminDashboard() {
   ]);
 
   return (
-    <div className="mx-auto max-w-5xl space-y-8 px-4 py-8">
+    <div className="mx-auto max-w-5xl space-y-8 px-4 py-8" suppressHydrationWarning>
       {/* Header with New Booking button */}
       <div className="flex items-start justify-between">
         <div>

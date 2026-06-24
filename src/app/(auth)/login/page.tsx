@@ -2,10 +2,10 @@
 
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { useActionState } from 'react';
+import { Suspense, useActionState } from 'react';
 import { type SignInState, signInAction } from '../actions';
 
-export default function LoginPage() {
+function LoginForm() {
   const [state, action, pending] = useActionState<SignInState, FormData>(signInAction, null);
   const params = useSearchParams();
   const wasReset = params.get('reset') === '1';
@@ -78,5 +78,13 @@ export default function LoginPage() {
         </button>
       </form>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
   );
 }

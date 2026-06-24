@@ -3,21 +3,36 @@ import { signOut } from '@/auth';
 import type { ModuleSlug } from '@/lib/permissions';
 import { getSessionWithModules } from '@/lib/permissions';
 import { getStudioProfile } from '@/lib/store-settings';
+import NavDropdown from './_components/NavDropdown';
 import NavLink from './_components/NavLink';
 import SettingsDropdown from './_components/SettingsDropdown';
 
 type NavItem = { href: string; label: string; module: ModuleSlug };
+type NavGroup = { label?: string; items: NavItem[] };
 
-const NAV_ITEMS: NavItem[] = [
-  { href: '/admin', label: 'Dashboard', module: 'dashboard' },
-  { href: '/admin/bookings', label: 'Bookings', module: 'bookings' },
-  { href: '/admin/inventory', label: 'Inventory', module: 'inventory' },
-  { href: '/admin/packages', label: 'Packages', module: 'packages' },
-  { href: '/admin/addons', label: 'Add-ons', module: 'addons' },
-  { href: '/admin/expenses', label: 'Expenses', module: 'expenses' },
-  { href: '/admin/cashflow', label: 'Cash Flow', module: 'cashflow' },
-  { href: '/admin/employees', label: 'Employees', module: 'employees' },
-  { href: '/admin/duty', label: 'Duty', module: 'duty' },
+const NAV_GROUPS: NavGroup[] = [
+  {
+    items: [{ href: '/admin', label: 'Dashboard', module: 'dashboard' }],
+  },
+  {
+    label: 'Operations',
+    items: [
+      { href: '/admin/bookings', label: 'Bookings', module: 'bookings' },
+      { href: '/admin/inventory', label: 'Inventory', module: 'inventory' },
+      { href: '/admin/packages', label: 'Packages', module: 'packages' },
+      { href: '/admin/addons', label: 'Add-ons', module: 'addons' },
+      { href: '/admin/employees', label: 'Employees', module: 'employees' },
+      { href: '/admin/duty', label: 'Duty', module: 'duty' },
+    ],
+  },
+  {
+    label: 'Finance',
+    items: [
+      { href: '/admin/expenses', label: 'Expenses', module: 'expenses' },
+      { href: '/admin/cashflow', label: 'Cash Flow', module: 'cashflow' },
+      { href: '/admin/reports', label: 'Reports', module: 'cashflow' },
+    ],
+  },
 ];
 
 const SETTINGS_ITEMS: NavItem[] = [
@@ -36,7 +51,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const isAdmin = user.role === 'admin';
   const studio = await getStudioProfile();
 
-  const visibleNav = NAV_ITEMS.filter((item) => modules.has(item.module));
+  const visibleNavGroups = NAV_GROUPS.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => modules.has(item.module)),
+  })).filter((group) => group.items.length > 0);
+
   const visibleSettings = SETTINGS_ITEMS.filter((item) => modules.has(item.module));
 
   return (
@@ -57,12 +76,18 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               {studio.studioName}
             </span>
           </div>
-          <nav className="flex items-center gap-1">
-            {visibleNav.map((item) => (
-              <NavLink key={item.href} href={item.href} exact={item.href === '/admin'}>
-                {item.label}
-              </NavLink>
-            ))}
+          <nav className="flex items-center gap-0.5">
+            {visibleNavGroups.map((group, idx) =>
+              group.label ? (
+                <NavDropdown key={idx} label={group.label} items={group.items} />
+              ) : (
+                group.items.map((item) => (
+                  <NavLink key={item.href} href={item.href} exact={item.href === '/admin'}>
+                    {item.label}
+                  </NavLink>
+                ))
+              ),
+            )}
             {visibleSettings.length > 0 && <SettingsDropdown items={visibleSettings} />}
           </nav>
         </div>

@@ -2,10 +2,12 @@
 
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { useActionState } from 'react';
+import { Suspense, useActionState } from 'react';
 import { type ResetState, resetPasswordAction } from '../actions';
 
-export default function ResetPasswordPage() {
+// ── Inner component — isolates useSearchParams inside <Suspense> ───────
+
+function ResetPasswordForm() {
   const [state, action, pending] = useActionState<ResetState, FormData>(resetPasswordAction, null);
   const params = useSearchParams();
   const token = params.get('token') ?? '';
@@ -82,5 +84,15 @@ export default function ResetPasswordPage() {
         </button>
       </form>
     </div>
+  );
+}
+
+// ── Page — Suspense boundary lets Next.js prerender the shell ──────────
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense>
+      <ResetPasswordForm />
+    </Suspense>
   );
 }

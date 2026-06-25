@@ -3,6 +3,7 @@ import { signOut } from '@/auth';
 import type { ModuleSlug } from '@/lib/permissions';
 import { getSessionWithModules } from '@/lib/permissions';
 import { getStudioProfile } from '@/lib/store-settings';
+import MobileNav from './_components/MobileNav';
 import NavDropdown from './_components/NavDropdown';
 import NavLink from './_components/NavLink';
 import SettingsDropdown from './_components/SettingsDropdown';
@@ -58,11 +59,32 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   const visibleSettings = SETTINGS_ITEMS.filter((item) => modules.has(item.module));
 
+  const signOutAction = async () => {
+    'use server';
+    await signOut({ redirectTo: '/login' });
+  };
+
   return (
     <div className="flex min-h-full flex-col">
       {/* Top nav */}
       <header className="flex h-12 items-center justify-between border-b border-zinc-200 bg-white px-4 dark:border-zinc-800 dark:bg-zinc-950">
-        <div className="flex items-center gap-6">
+        {/* Left: burger (mobile) + logo + desktop nav */}
+        <div className="flex items-center gap-3 md:gap-6">
+          {/* Burger — mobile only */}
+          <div className="md:hidden">
+            <MobileNav
+              navGroups={visibleNavGroups}
+              settingsItems={visibleSettings}
+              userName={user.name ?? user.email ?? ''}
+              isAdmin={isAdmin}
+              studioName={studio.studioName}
+              logoUrl={studio.logoUrl}
+              signOutAction={signOutAction}
+              showRoadmap={isAdmin}
+            />
+          </div>
+
+          {/* Logo + studio name */}
           <div className="flex items-center gap-2">
             {studio.logoUrl && (
               // eslint-disable-next-line @next/next/no-img-element
@@ -76,7 +98,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               {studio.studioName}
             </span>
           </div>
-          <nav className="flex items-center gap-0.5">
+
+          {/* Desktop nav — hidden on mobile */}
+          <nav className="hidden items-center gap-0.5 md:flex">
             {visibleNavGroups.map((group, idx) =>
               group.label ? (
                 <NavDropdown key={idx} label={group.label} items={group.items} />
@@ -89,10 +113,14 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               ),
             )}
             {visibleSettings.length > 0 && <SettingsDropdown items={visibleSettings} />}
+            {isAdmin && (
+              <NavLink href="/admin/roadmap">Roadmap</NavLink>
+            )}
           </nav>
         </div>
 
-        <div className="flex items-center gap-3">
+        {/* Right: user info + sign out — desktop only */}
+        <div className="hidden items-center gap-3 md:flex">
           <span className="text-xs text-zinc-500">
             {user.name ?? user.email}
             {isAdmin && (
@@ -101,12 +129,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               </span>
             )}
           </span>
-          <form
-            action={async () => {
-              'use server';
-              await signOut({ redirectTo: '/login' });
-            }}
-          >
+          <form action={signOutAction}>
             <button
               type="submit"
               className="rounded-md border border-zinc-200 px-2.5 py-1 text-xs text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"

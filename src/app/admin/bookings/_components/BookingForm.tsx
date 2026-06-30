@@ -313,20 +313,21 @@ export default function BookingForm({ clients, packages, addonsMap, paymentModes
         <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Payment</h2>
         <div className="grid grid-cols-2 gap-4">
           <label className="block">
-            <span className={labelCls}>Amount paid</span>
+            <span className={labelCls}>Amount paid *</span>
             <input
               type="number"
               name="amountPaid"
               min={0}
               step="0.01"
-              defaultValue={0}
+              placeholder="0.00"
               className={inputCls}
+              required
             />
           </label>
           <label className="block">
-            <span className={labelCls}>Payment method</span>
-            <select name="paymentModeId" className={inputCls}>
-              <option value="">— select —</option>
+            <span className={labelCls}>Payment method *</span>
+            <select name="paymentModeId" className={inputCls} required>
+              <option value="" disabled>— select —</option>
               {paymentModes.map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.name}

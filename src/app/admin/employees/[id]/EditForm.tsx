@@ -7,6 +7,7 @@ import { changeEmployeePassword, toggleEmployeeActive, updateEmployee } from '..
 type Employee = {
   id: string;
   email: string;
+  username: string | null;
   name: string | null;
   role: string;
   active: boolean;
@@ -89,6 +90,19 @@ export default function EditForm({ employee }: Props) {
             {employee.email}
           </p>
         </div>
+
+        <Field label="Username *">
+          <input
+            name="username"
+            required
+            minLength={6}
+            maxLength={30}
+            defaultValue={employee.username ?? ''}
+            placeholder="e.g. juan_dc"
+            className={inputCls}
+          />
+          <p className="mt-1 text-xs text-zinc-400">Min. 6 characters. Lowercase letters, numbers, underscores only.</p>
+        </Field>
 
         <div className="border-t border-zinc-100 dark:border-zinc-800" />
 

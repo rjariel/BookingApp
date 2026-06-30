@@ -68,8 +68,8 @@ const createBookingSchema = z.object({
   addonsJson: z.string().optional().default('[]'),
   itemsJson: z.string().optional().default('[]'),
 
-  amountPaid: z.coerce.number().min(0).default(0),
-  paymentModeId: z.string().uuid().optional(),
+  amountPaid: z.coerce.number().min(0),
+  paymentModeId: z.string().uuid('Payment method is required'),
 });
 
 const statusTransitionMap: Record<string, readonly string[]> = {
@@ -124,8 +124,8 @@ export async function createBooking(formData: FormData): Promise<ActionResult<{ 
     notes: formData.get('notes') || undefined,
     addonsJson: formData.get('addonsJson') || '[]',
     itemsJson: formData.get('itemsJson') || '[]',
-    amountPaid: formData.get('amountPaid') || '0',
-    paymentModeId: formData.get('paymentModeId') || undefined,
+    amountPaid: formData.get('amountPaid'),
+    paymentModeId: formData.get('paymentModeId'),
   });
 
   if (!raw.success) {
@@ -229,15 +229,13 @@ export async function createBooking(formData: FormData): Promise<ActionResult<{ 
       const derivedPaymentStatus =
         amountPaid >= amountTotal ? 'paid' : amountPaid > 0 ? 'partial' : 'unpaid';
 
-      // Validate payment mode if provided
-      if (paymentModeId) {
-        const [mode] = await tx
-          .select({ id: paymentModes.id })
-          .from(paymentModes)
-          .where(eq(paymentModes.id, paymentModeId))
-          .limit(1);
-        if (!mode) throw new Error('Selected payment mode not found.');
-      }
+      // Validate payment mode
+      const [mode] = await tx
+        .select({ id: paymentModes.id })
+        .from(paymentModes)
+        .where(eq(paymentModes.id, paymentModeId))
+        .limit(1);
+      if (!mode) throw new Error('Selected payment mode not found.');
 
       // 6. Insert booking (exclusion constraint fires here on overlap)
       const [booking] = await tx
@@ -250,7 +248,7 @@ export async function createBooking(formData: FormData): Promise<ActionResult<{ 
           amountTotal: String(amountTotal),
           amountPaid: String(amountPaid),
           paymentStatus: derivedPaymentStatus as 'unpaid' | 'partial' | 'paid',
-          paymentModeId: paymentModeId ?? null,
+          paymentModeId,
           notes: notes ?? null,
           createdBy: actorId,
         })

@@ -18,6 +18,7 @@ export default async function EditEmployeePage({ params }: Props) {
     .select({
       id: users.id,
       email: users.email,
+      username: users.username,
       name: users.name,
       role: users.role,
       active: users.active,

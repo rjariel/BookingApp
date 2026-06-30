@@ -1,6 +1,6 @@
 'use server';
 
-import { eq } from 'drizzle-orm';
+import { and, eq, ne } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
@@ -16,6 +16,11 @@ const createSchema = z.object({
   firstName: z.string().min(1, 'First name required').max(80),
   lastName: z.string().min(1, 'Last name required').max(80),
   email: z.string().email('Invalid email'),
+  username: z
+    .string()
+    .min(6, 'Username must be at least 6 characters')
+    .max(30, 'Username max 30 characters')
+    .regex(/^[a-z0-9_]+$/, 'Username: lowercase letters, numbers, underscores only'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
   position: z.string().max(100).optional(),
   details: z.string().max(1000).optional(),
@@ -42,6 +47,7 @@ export async function createEmployee(_prev: unknown, formData: FormData) {
     firstName: formData.get('firstName'),
     lastName: formData.get('lastName'),
     email: formData.get('email'),
+    username: formData.get('username'),
     password: formData.get('password'),
     position: formData.get('position') ?? undefined,
     details: formData.get('details') ?? undefined,
@@ -60,6 +66,7 @@ export async function createEmployee(_prev: unknown, formData: FormData) {
     firstName,
     lastName,
     email,
+    username,
     password,
     position,
     details,
@@ -78,12 +85,20 @@ export async function createEmployee(_prev: unknown, formData: FormData) {
     .limit(1);
   if (existing.length > 0) return { error: 'Email already in use.' };
 
+  // Check username uniqueness
+  const existingUsername = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.username, username))
+    .limit(1);
+  if (existingUsername.length > 0) return { error: 'Username already taken.' };
+
   const passwordHash = await hashPassword(password);
   const displayName = `${firstName} ${lastName}`.trim();
 
   const [newUser] = await db
     .insert(users)
-    .values({ email, passwordHash, name: displayName, role: 'staff', active: true })
+    .values({ email, username, passwordHash, name: displayName, role: 'staff', active: true })
     .returning({ id: users.id });
 
   if (!newUser) return { error: 'Failed to create user.' };
@@ -119,6 +134,11 @@ const updateSchema = z.object({
   userId: z.string().uuid(),
   firstName: z.string().min(1, 'First name required').max(80),
   lastName: z.string().min(1, 'Last name required').max(80),
+  username: z
+    .string()
+    .min(6, 'Username must be at least 6 characters')
+    .max(30, 'Username max 30 characters')
+    .regex(/^[a-z0-9_]+$/, 'Username: lowercase letters, numbers, underscores only'),
   position: z.string().max(100).optional(),
   details: z.string().max(1000).optional(),
   salary: z
@@ -144,6 +164,7 @@ export async function updateEmployee(_prev: unknown, formData: FormData) {
     userId: formData.get('userId'),
     firstName: formData.get('firstName'),
     lastName: formData.get('lastName'),
+    username: formData.get('username'),
     position: formData.get('position') ?? undefined,
     details: formData.get('details') ?? undefined,
     salary: formData.get('salary') ?? undefined,
@@ -161,6 +182,7 @@ export async function updateEmployee(_prev: unknown, formData: FormData) {
     userId,
     firstName,
     lastName,
+    username,
     position,
     details,
     salary,
@@ -171,7 +193,15 @@ export async function updateEmployee(_prev: unknown, formData: FormData) {
   } = parsed.data;
   const displayName = `${firstName} ${lastName}`.trim();
 
-  await db.update(users).set({ name: displayName }).where(eq(users.id, userId));
+  // Check username uniqueness (exclude self)
+  const existingUsername = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(and(eq(users.username, username), ne(users.id, userId)))
+    .limit(1);
+  if (existingUsername.length > 0) return { error: 'Username already taken.' };
+
+  await db.update(users).set({ name: displayName, username }).where(eq(users.id, userId));
 
   await db
     .insert(employeeProfiles)

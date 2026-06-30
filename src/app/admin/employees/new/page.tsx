@@ -76,6 +76,21 @@ export default function NewEmployeePage() {
 
         <div>
           <label className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+            Username <span className="text-red-400">*</span>
+          </label>
+          <input
+            name="username"
+            required
+            minLength={6}
+            maxLength={30}
+            placeholder="e.g. juan_dc"
+            className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:ring-zinc-400"
+          />
+          <p className="mt-1 text-xs text-zinc-400">Min. 6 characters. Lowercase letters, numbers, underscores only.</p>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
             Password <span className="text-red-400">*</span>
           </label>
           <input

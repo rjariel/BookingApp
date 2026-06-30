@@ -1,7 +1,6 @@
 import { eq } from 'drizzle-orm';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import { auth } from '@/auth';
 import { db } from '@/db';
 import { expenseTypes } from '@/db/schema';
 import { requireModule } from '@/lib/permissions';
@@ -12,8 +11,6 @@ export const metadata = { title: 'Edit Expense Type' };
 
 export default async function EditExpenseTypePage({ params }: { params: Promise<{ id: string }> }) {
   await requireModule('expense_types');
-  const session = await auth();
-  if (session?.user?.role !== 'admin') redirect('/admin');
 
   const { id } = await params;
 

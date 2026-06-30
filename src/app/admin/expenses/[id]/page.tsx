@@ -1,7 +1,6 @@
 import { eq } from 'drizzle-orm';
 import Link from 'next/link';
-import { notFound, redirect } from 'next/navigation';
-import { auth } from '@/auth';
+import { notFound } from 'next/navigation';
 import { db } from '@/db';
 import { expenses, expenseTypes, inventoryItems, paymentModes, users } from '@/db/schema';
 import { requireModule } from '@/lib/permissions';
@@ -16,8 +15,6 @@ const fmtMoney = (v: string) =>
 
 export default async function ExpenseDetailPage({ params }: { params: Promise<{ id: string }> }) {
   await requireModule('expenses');
-  const session = await auth();
-  if (session?.user?.role !== 'admin') redirect('/admin');
 
   const { id } = await params;
 

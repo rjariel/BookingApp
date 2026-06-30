@@ -10,10 +10,9 @@ import { logActivity } from '@/lib/activity-log';
 
 export type ActionResult<T = void> = { ok: true; data: T } | { ok: false; error: string };
 
-async function getAdminActorId(): Promise<string | null> {
+async function getActorId(): Promise<string | null> {
   const session = await auth();
-  if (session?.user?.role !== 'admin') return null;
-  return session.user.id ?? null;
+  return session?.user?.id ?? null;
 }
 
 const expenseSchema = z.object({
@@ -28,8 +27,8 @@ const expenseSchema = z.object({
 });
 
 export async function createExpense(formData: FormData): Promise<ActionResult<{ id: string }>> {
-  const actorId = await getAdminActorId();
-  if (!actorId) return { ok: false, error: 'Admin access required.' };
+  const actorId = await getActorId();
+  if (!actorId) return { ok: false, error: 'Authentication required.' };
 
   const raw = expenseSchema.safeParse({
     expenseTypeId: formData.get('expenseTypeId'),

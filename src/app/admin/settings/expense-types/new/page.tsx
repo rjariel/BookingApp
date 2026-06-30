@@ -1,14 +1,11 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { auth } from '@/auth';
 import ExpenseTypeForm from '../_components/ExpenseTypeForm';
 import { createExpenseType } from '../actions';
 
 export const metadata = { title: 'New Expense Type' };
 
 export default async function NewExpenseTypePage() {
-  const session = await auth();
-  if (session?.user?.role !== 'admin') redirect('/admin');
 
   async function action(formData: FormData) {
     'use server';

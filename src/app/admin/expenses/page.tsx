@@ -1,7 +1,5 @@
 import { desc, eq } from 'drizzle-orm';
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
-import { auth } from '@/auth';
 import { db } from '@/db';
 import { expenses, expenseTypes, paymentModes } from '@/db/schema';
 import { requireModule } from '@/lib/permissions';
@@ -13,8 +11,6 @@ const fmtMoney = (v: string) =>
 
 export default async function ExpensesPage() {
   await requireModule('expenses');
-  const session = await auth();
-  if (session?.user?.role !== 'admin') redirect('/admin');
 
   const rows = await db
     .select({

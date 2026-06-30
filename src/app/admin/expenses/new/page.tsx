@@ -1,7 +1,6 @@
 import { asc, eq } from 'drizzle-orm';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { auth } from '@/auth';
 import { db } from '@/db';
 import { expenseTypes, inventoryItems, paymentModes } from '@/db/schema';
 import { requireModule } from '@/lib/permissions';
@@ -12,8 +11,6 @@ export const metadata = { title: 'Log Expense' };
 
 export default async function NewExpensePage() {
   await requireModule('expenses');
-  const session = await auth();
-  if (session?.user?.role !== 'admin') redirect('/admin');
 
   const [types, modes, items] = await Promise.all([
     db

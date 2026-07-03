@@ -303,6 +303,20 @@ export const cashWithdrawals = pgTable('cash_withdrawals', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
+// Cash coming in — manually logged by whoever collected it. Fully decoupled
+// from `bookings.amount_paid`; this table is the source of truth for cash flow.
+export const cashIncome = pgTable('cash_income', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  date: date('date').notNull(),
+  amount: numeric('amount', { precision: 10, scale: 2 }).notNull(),
+  source: text('source').notNull(),
+  recordedBy: uuid('recorded_by')
+    .notNull()
+    .references(() => users.id, { onDelete: 'restrict' }),
+  notes: text('notes'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
 // ── Auth tokens ───────────────────────────────────────────────────────
 export const passwordResetTokens = pgTable('password_reset_tokens', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -462,6 +476,10 @@ export const cashWithdrawalsRelations = relations(cashWithdrawals, ({ one }) => 
   withdrawnByUser: one(users, { fields: [cashWithdrawals.withdrawnBy], references: [users.id] }),
 }));
 
+export const cashIncomeRelations = relations(cashIncome, ({ one }) => ({
+  recordedByUser: one(users, { fields: [cashIncome.recordedBy], references: [users.id] }),
+}));
+
 export const employeeProfilesRelations = relations(employeeProfiles, ({ one }) => ({
   user: one(users, { fields: [employeeProfiles.userId], references: [users.id] }),
 }));
@@ -524,6 +542,8 @@ export const MODULE_LABELS: Record<(typeof ALL_MODULES)[number], string> = {
 export type CashReport = typeof cashReports.$inferSelect;
 export type NewCashReport = typeof cashReports.$inferInsert;
 export type CashWithdrawal = typeof cashWithdrawals.$inferSelect;
+export type CashIncome = typeof cashIncome.$inferSelect;
+export type NewCashIncome = typeof cashIncome.$inferInsert;
 
 export type Role = typeof roles.$inferSelect;
 export type NewRole = typeof roles.$inferInsert;

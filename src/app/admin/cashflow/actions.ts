@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { auth } from '@/auth';
 import { db } from '@/db';
-import { cashReports, cashWithdrawals } from '@/db/schema';
+import { cashIncome, cashReports, cashWithdrawals } from '@/db/schema';
 import { logActivity } from '@/lib/activity-log';
 
 export type ActionResult<T = void> = { ok: true; data: T } | { ok: false; error: string };
@@ -119,6 +119,53 @@ export async function createWithdrawal(formData: FormData): Promise<ActionResult
     entityType: 'cash_withdrawal',
     entityId: row.id,
     summary: { date, amount, reason },
+  });
+
+  revalidatePath('/admin/cashflow');
+  return { ok: true, data: { id: row.id } };
+}
+
+// ── Record cash income (staff + admin) ─────────────────────────────────
+const incomeSchema = z.object({
+  date: z.string().min(1, 'Date is required'),
+  amount: z.coerce.number().positive('Amount must be greater than 0'),
+  source: z.string().min(1, 'Source is required').max(500),
+  notes: z.string().max(1000).optional(),
+});
+
+export async function createIncomeEntry(formData: FormData): Promise<ActionResult<{ id: string }>> {
+  const actor = await getActor();
+  if (!actor) return { ok: false, error: 'Not authenticated.' };
+
+  const raw = incomeSchema.safeParse({
+    date: formData.get('date'),
+    amount: formData.get('amount'),
+    source: formData.get('source'),
+    notes: formData.get('notes') || undefined,
+  });
+  if (!raw.success) return { ok: false, error: raw.error.issues[0]?.message ?? 'Invalid input.' };
+
+  const { date, amount, source, notes } = raw.data;
+
+  const [row] = await db
+    .insert(cashIncome)
+    .values({
+      date,
+      amount: String(amount),
+      source,
+      recordedBy: actor.id,
+      notes: notes ?? null,
+    })
+    .returning({ id: cashIncome.id });
+
+  if (!row) return { ok: false, error: 'Failed to record income.' };
+
+  await logActivity({
+    actorId: actor.id,
+    action: 'create',
+    entityType: 'cash_income',
+    entityId: row.id,
+    summary: { date, amount, source },
   });
 
   revalidatePath('/admin/cashflow');

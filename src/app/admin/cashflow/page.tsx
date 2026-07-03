@@ -1,11 +1,12 @@
-import { and, desc, eq, gte, lte, sql } from 'drizzle-orm';
+import { desc, eq, sql } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { db } from '@/db';
-import { bookings, cashReports, cashWithdrawals, expenses, users } from '@/db/schema';
+import { cashIncome, cashReports, cashWithdrawals, expenses, users } from '@/db/schema';
 import { requireModule } from '@/lib/permissions';
-import { phDateStr, phDayBounds } from '@/lib/timezone';
+import { phDateStr } from '@/lib/timezone';
 import CashReportForm from './_components/CashReportForm';
+import IncomeForm from './_components/IncomeForm';
 import WithdrawalForm from './_components/WithdrawalForm';
 
 export const metadata = { title: 'Cash Flow' };
@@ -61,10 +62,10 @@ export default async function CashFlowPage() {
 
 // ── Admin View ─────────────────────────────────────────────────────────
 async function AdminView({ today }: { today: string; actorId: string }) {
-  // 1. Studio totals: all booking payments in, all expenses out, all withdrawals out
+  // 1. Studio totals: all manually logged cash in, all expenses out, all withdrawals out
   const [incomeRow] = await db
-    .select({ total: sql<string>`coalesce(sum(amount_paid), 0)` })
-    .from(bookings);
+    .select({ total: sql<string>`coalesce(sum(amount), 0)` })
+    .from(cashIncome);
 
   const [expenseRow] = await db
     .select({ total: sql<string>`coalesce(sum(amount), 0)` })
@@ -80,11 +81,10 @@ async function AdminView({ today }: { today: string; actorId: string }) {
   const studioBalance = totalIn - totalExpenses - totalWithdrawn;
 
   // 2. Today's numbers
-  const { start: todayStart, end: todayEnd } = phDayBounds();
   const [todayIncomeRow] = await db
-    .select({ total: sql<string>`coalesce(sum(amount_paid), 0)` })
-    .from(bookings)
-    .where(and(gte(bookings.startsAt, todayStart), lte(bookings.startsAt, todayEnd)));
+    .select({ total: sql<string>`coalesce(sum(amount), 0)` })
+    .from(cashIncome)
+    .where(eq(cashIncome.date, today));
 
   const [todayExpRow] = await db
     .select({ total: sql<string>`coalesce(sum(amount), 0)` })
@@ -111,15 +111,14 @@ async function AdminView({ today }: { today: string; actorId: string }) {
     .orderBy(desc(cashReports.date), desc(cashReports.createdAt))
     .limit(200);
 
-  // 4. Booking revenue per date (to compute "expected" per report)
-  // Bucket by PH calendar day, not UTC — matches `cashReports.date` / `spentOn`.
+  // 4. Manually logged income per date (to compute "expected" per EOD report)
   const dailyRevenue = await db
     .select({
-      date: sql<string>`date(starts_at AT TIME ZONE 'Asia/Manila')`,
-      total: sql<string>`coalesce(sum(amount_paid), 0)`,
+      date: cashIncome.date,
+      total: sql<string>`coalesce(sum(${cashIncome.amount}), 0)`,
     })
-    .from(bookings)
-    .groupBy(sql`date(starts_at AT TIME ZONE 'Asia/Manila')`);
+    .from(cashIncome)
+    .groupBy(cashIncome.date);
 
   const revenueByDate = new Map(dailyRevenue.map((r) => [r.date, parseFloat(r.total)]));
 
@@ -137,6 +136,22 @@ async function AdminView({ today }: { today: string; actorId: string }) {
     .from(cashWithdrawals)
     .leftJoin(users, eq(cashWithdrawals.withdrawnBy, users.id))
     .orderBy(desc(cashWithdrawals.date), desc(cashWithdrawals.createdAt))
+    .limit(100);
+
+  // 6. Income log
+  const incomeEntries = await db
+    .select({
+      id: cashIncome.id,
+      date: cashIncome.date,
+      amount: cashIncome.amount,
+      source: cashIncome.source,
+      notes: cashIncome.notes,
+      recordedByName: users.name,
+      recordedByEmail: users.email,
+    })
+    .from(cashIncome)
+    .leftJoin(users, eq(cashIncome.recordedBy, users.id))
+    .orderBy(desc(cashIncome.date), desc(cashIncome.createdAt))
     .limit(100);
 
   return (
@@ -166,15 +181,21 @@ async function AdminView({ today }: { today: string; actorId: string }) {
         </div>
       </div>
 
-      {/* Record withdrawal */}
-      <section>
-        <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mb-3">
-          Record cash withdrawal
-        </h2>
-        <div className="max-w-lg">
+      {/* Record income / withdrawal */}
+      <div className="grid gap-8 sm:grid-cols-2">
+        <section>
+          <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mb-3">
+            Record cash income
+          </h2>
+          <IncomeForm defaultDate={today} />
+        </section>
+        <section>
+          <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mb-3">
+            Record cash withdrawal
+          </h2>
           <WithdrawalForm defaultDate={today} />
-        </div>
-      </section>
+        </section>
+      </div>
 
       {/* Staff EOD reports */}
       <section>
@@ -220,6 +241,45 @@ async function AdminView({ today }: { today: string; actorId: string }) {
                     </tr>
                   );
                 })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {/* Income log */}
+      <section>
+        <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mb-3">Income log</h2>
+        {incomeEntries.length === 0 ? (
+          <p className="text-sm text-zinc-400">No income recorded yet.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-zinc-200 text-left text-xs text-zinc-500 dark:border-zinc-800">
+                  <th className="pb-2 font-medium">Date</th>
+                  <th className="pb-2 font-medium">Source</th>
+                  <th className="pb-2 font-medium">By</th>
+                  <th className="pb-2 text-right font-medium">Amount</th>
+                  <th className="pb-2 font-medium">Notes</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                {incomeEntries.map((e) => (
+                  <tr key={e.id}>
+                    <td className="py-3 pr-4 text-zinc-500 whitespace-nowrap">{e.date}</td>
+                    <td className="py-3 pr-4 text-zinc-800 dark:text-zinc-200">{e.source}</td>
+                    <td className="py-3 pr-4 text-zinc-500">
+                      {e.recordedByName ?? e.recordedByEmail ?? '—'}
+                    </td>
+                    <td className="py-3 pr-4 text-right font-medium text-zinc-800 dark:text-zinc-200 whitespace-nowrap">
+                      {fmt(e.amount)}
+                    </td>
+                    <td className="py-3 text-zinc-400 text-xs max-w-[160px] truncate">
+                      {e.notes ?? '—'}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -293,16 +353,16 @@ async function StaffView({
     .orderBy(desc(cashReports.date))
     .limit(60);
 
-  // Daily revenue for their bookings (by staffId), bucketed by PH calendar day
+  // Their manually logged income, bucketed by day
   const dailyRevenue = await db
     .select({
-      date: sql<string>`date(starts_at AT TIME ZONE 'Asia/Manila')`,
-      cashIn: sql<string>`coalesce(sum(amount_paid), 0)`,
+      date: cashIncome.date,
+      cashIn: sql<string>`coalesce(sum(${cashIncome.amount}), 0)`,
     })
-    .from(bookings)
-    .where(eq(bookings.staffId, staffId))
-    .groupBy(sql`date(starts_at AT TIME ZONE 'Asia/Manila')`)
-    .orderBy(desc(sql`date(starts_at AT TIME ZONE 'Asia/Manila')`))
+    .from(cashIncome)
+    .where(eq(cashIncome.recordedBy, staffId))
+    .groupBy(cashIncome.date)
+    .orderBy(desc(cashIncome.date))
     .limit(60);
 
   const revenueByDate = new Map(dailyRevenue.map((r) => [r.date, parseFloat(r.cashIn)]));
@@ -320,6 +380,14 @@ async function StaffView({
         <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">My Cash Flow</h1>
         <p className="mt-1 text-sm text-zinc-500">{staffName} · Day-by-day cash log</p>
       </div>
+
+      {/* Log income as it comes in */}
+      <section>
+        <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mb-3">
+          Record cash income
+        </h2>
+        <IncomeForm defaultDate={today} />
+      </section>
 
       {/* EOD submit for today */}
       <section>

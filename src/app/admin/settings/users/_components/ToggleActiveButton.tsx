@@ -14,6 +14,7 @@ export function ToggleActiveButton({ userId, active, name }: Props) {
       <button
         type="submit"
         disabled={pending}
+        aria-label={`${active ? 'Deactivate' : 'Activate'} ${name}`}
         className={`rounded-md border px-2.5 py-1 text-xs transition-colors disabled:opacity-50 ${
           active
             ? 'border-red-200 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950'

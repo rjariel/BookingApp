@@ -1,7 +1,6 @@
 'use client';
 
-import { useActionState } from 'react';
-import { useState } from 'react';
+import { useActionState, useState } from 'react';
 import { replaceDutyRoster } from '../duty/actions';
 
 type StaffUser = { id: string; name: string | null; email: string };
@@ -31,6 +30,7 @@ export default function OnDutyToday({ today, allStaff, currentDuty, canEdit }: P
         <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">On Duty</h3>
         {canEdit && (
           <button
+            type="button"
             onClick={() => setShowModal(!showModal)}
             className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
           >
@@ -59,7 +59,10 @@ export default function OnDutyToday({ today, allStaff, currentDuty, canEdit }: P
 
       {/* Quick edit modal */}
       {showModal && canEdit && (
-        <form action={action} className="mt-4 rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-900/30">
+        <form
+          action={action}
+          className="mt-4 rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-900/30"
+        >
           <input type="hidden" name="date" value={today} />
 
           <p className="mb-3 text-xs font-medium text-zinc-600 dark:text-zinc-400">

@@ -4,6 +4,7 @@ import { auth } from '@/auth';
 import { db } from '@/db';
 import { bookings, cashReports, cashWithdrawals, expenses, users } from '@/db/schema';
 import { requireModule } from '@/lib/permissions';
+import { phDateStr, phDayBounds } from '@/lib/timezone';
 import CashReportForm from './_components/CashReportForm';
 import WithdrawalForm from './_components/WithdrawalForm';
 
@@ -43,8 +44,8 @@ export default async function CashFlowPage() {
   const isAdmin = session.user.role === 'admin';
   const userId = session.user.id;
 
-  // Today's date string (YYYY-MM-DD) — use UTC date for consistency
-  const today = new Date().toISOString().slice(0, 10);
+  // Today's date string (YYYY-MM-DD) in PH time — matches `spentOn`/`date` columns
+  const today = phDateStr();
 
   if (isAdmin) {
     return <AdminView today={today} actorId={userId} />;
@@ -79,15 +80,11 @@ async function AdminView({ today }: { today: string; actorId: string }) {
   const studioBalance = totalIn - totalExpenses - totalWithdrawn;
 
   // 2. Today's numbers
+  const { start: todayStart, end: todayEnd } = phDayBounds();
   const [todayIncomeRow] = await db
     .select({ total: sql<string>`coalesce(sum(amount_paid), 0)` })
     .from(bookings)
-    .where(
-      and(
-        gte(bookings.startsAt, new Date(`${today}T00:00:00Z`)),
-        lte(bookings.startsAt, new Date(`${today}T23:59:59Z`)),
-      ),
-    );
+    .where(and(gte(bookings.startsAt, todayStart), lte(bookings.startsAt, todayEnd)));
 
   const [todayExpRow] = await db
     .select({ total: sql<string>`coalesce(sum(amount), 0)` })
@@ -115,13 +112,14 @@ async function AdminView({ today }: { today: string; actorId: string }) {
     .limit(200);
 
   // 4. Booking revenue per date (to compute "expected" per report)
+  // Bucket by PH calendar day, not UTC — matches `cashReports.date` / `spentOn`.
   const dailyRevenue = await db
     .select({
-      date: sql<string>`date(starts_at AT TIME ZONE 'UTC')`,
+      date: sql<string>`date(starts_at AT TIME ZONE 'Asia/Manila')`,
       total: sql<string>`coalesce(sum(amount_paid), 0)`,
     })
     .from(bookings)
-    .groupBy(sql`date(starts_at AT TIME ZONE 'UTC')`);
+    .groupBy(sql`date(starts_at AT TIME ZONE 'Asia/Manila')`);
 
   const revenueByDate = new Map(dailyRevenue.map((r) => [r.date, parseFloat(r.total)]));
 
@@ -295,16 +293,16 @@ async function StaffView({
     .orderBy(desc(cashReports.date))
     .limit(60);
 
-  // Daily revenue for their bookings (by staffId)
+  // Daily revenue for their bookings (by staffId), bucketed by PH calendar day
   const dailyRevenue = await db
     .select({
-      date: sql<string>`date(starts_at AT TIME ZONE 'UTC')`,
+      date: sql<string>`date(starts_at AT TIME ZONE 'Asia/Manila')`,
       cashIn: sql<string>`coalesce(sum(amount_paid), 0)`,
     })
     .from(bookings)
     .where(eq(bookings.staffId, staffId))
-    .groupBy(sql`date(starts_at AT TIME ZONE 'UTC')`)
-    .orderBy(desc(sql`date(starts_at AT TIME ZONE 'UTC')`))
+    .groupBy(sql`date(starts_at AT TIME ZONE 'Asia/Manila')`)
+    .orderBy(desc(sql`date(starts_at AT TIME ZONE 'Asia/Manila')`))
     .limit(60);
 
   const revenueByDate = new Map(dailyRevenue.map((r) => [r.date, parseFloat(r.cashIn)]));

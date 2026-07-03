@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useId } from 'react';
 import type { packages } from '@/db/schema';
 import type { ActionResult } from '../actions';
 
@@ -74,14 +74,16 @@ type FieldProps = React.InputHTMLAttributes<HTMLInputElement> & {
 };
 
 function Field({ label, name, multiline, ...props }: FieldProps) {
+  const id = useId();
   const base =
     'mt-1 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100';
 
   return (
-    <label className="block">
+    <label htmlFor={id} className="block">
       <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{label}</span>
       {multiline ? (
         <textarea
+          id={id}
           name={name}
           rows={3}
           defaultValue={props.defaultValue as string}
@@ -89,7 +91,7 @@ function Field({ label, name, multiline, ...props }: FieldProps) {
           className={base}
         />
       ) : (
-        <input name={name} className={base} {...props} />
+        <input id={id} name={name} className={base} {...props} />
       )}
     </label>
   );

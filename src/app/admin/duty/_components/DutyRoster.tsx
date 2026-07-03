@@ -53,6 +53,7 @@ function DutyEntry({ entry, isAdmin }: { entry: Entry; isAdmin: boolean }) {
                 className="rounded-md border border-zinc-300 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
               />
               <button
+                type="button"
                 onClick={saveNote}
                 disabled={pending}
                 className="text-xs font-medium text-emerald-700 hover:underline disabled:opacity-50 dark:text-emerald-400"
@@ -60,6 +61,7 @@ function DutyEntry({ entry, isAdmin }: { entry: Entry; isAdmin: boolean }) {
                 Save
               </button>
               <button
+                type="button"
                 onClick={() => {
                   setEditing(false);
                   setNote(entry.notes ?? '');
@@ -83,6 +85,7 @@ function DutyEntry({ entry, isAdmin }: { entry: Entry; isAdmin: boolean }) {
         <div className="flex shrink-0 items-center gap-3">
           {!editing && (
             <button
+              type="button"
               onClick={() => setEditing(true)}
               className="text-xs text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
             >
@@ -90,6 +93,7 @@ function DutyEntry({ entry, isAdmin }: { entry: Entry; isAdmin: boolean }) {
             </button>
           )}
           <button
+            type="button"
             onClick={remove}
             disabled={pending}
             className="text-xs text-red-400 hover:text-red-600 disabled:opacity-50 dark:hover:text-red-300"

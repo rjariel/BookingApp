@@ -33,6 +33,7 @@ export default function MobileNav({
   const drawerRef = useRef<HTMLDivElement>(null);
 
   // Close on route change
+  // biome-ignore lint/correctness/useExhaustiveDependencies: pathname is intentionally the change trigger, not read in the effect body
   useEffect(() => {
     setOpen(false);
   }, [pathname]);
@@ -55,10 +56,8 @@ export default function MobileNav({
   const isActive = (href: string, exact = false) =>
     exact ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
 
-  const linkBase =
-    'flex items-center rounded-md px-3 py-2 text-sm transition-colors';
-  const linkActive =
-    'bg-zinc-100 text-zinc-900 font-medium dark:bg-zinc-800 dark:text-zinc-100';
+  const linkBase = 'flex items-center rounded-md px-3 py-2 text-sm transition-colors';
+  const linkActive = 'bg-zinc-100 text-zinc-900 font-medium dark:bg-zinc-800 dark:text-zinc-100';
   const linkInactive =
     'text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100';
 
@@ -101,12 +100,8 @@ export default function MobileNav({
         <div className="flex h-12 items-center justify-between border-b border-zinc-200 px-4 dark:border-zinc-800">
           <div className="flex items-center gap-2">
             {logoUrl && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={logoUrl}
-                alt={studioName}
-                className="h-6 w-6 rounded object-contain"
-              />
+              // biome-ignore lint/performance/noImgElement: arbitrary uploaded/data-URL logo, not a next/image-optimizable static asset
+              <img src={logoUrl} alt={studioName} className="h-6 w-6 rounded object-contain" />
             )}
             <span className="text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
               {studioName}
@@ -132,7 +127,7 @@ export default function MobileNav({
         {/* Nav content */}
         <nav className="flex-1 overflow-y-auto px-3 py-3">
           {navGroups.map((group, idx) => (
-            <div key={idx} className="mb-4">
+            <div key={group.label ?? group.items[0]?.href ?? `nav-group-${idx}`} className="mb-4">
               {group.label && (
                 <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
                   {group.label}
@@ -200,9 +195,7 @@ export default function MobileNav({
               <p className="truncate text-xs font-medium text-zinc-900 dark:text-zinc-100">
                 {userName}
               </p>
-              {isAdmin && (
-                <p className="text-[10px] text-zinc-400">Admin</p>
-              )}
+              {isAdmin && <p className="text-[10px] text-zinc-400">Admin</p>}
             </div>
           </div>
           <form action={signOutAction}>

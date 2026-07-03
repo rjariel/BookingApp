@@ -77,7 +77,7 @@ export default async function EmployeesPage() {
                 {/* Avatar */}
                 <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
                   {r.photo ? (
-                    // eslint-disable-next-line @next/next/no-img-element
+                    // biome-ignore lint/performance/noImgElement: arbitrary uploaded/data-URL photo, not a next/image-optimizable static asset
                     <img src={r.photo} alt={name} className="h-full w-full object-cover" />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center text-sm font-semibold text-zinc-500 dark:text-zinc-400">
@@ -119,6 +119,7 @@ export default async function EmployeesPage() {
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
+                  aria-hidden="true"
                 >
                   <path
                     strokeLinecap="round"

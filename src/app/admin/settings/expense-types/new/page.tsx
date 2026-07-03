@@ -6,7 +6,6 @@ import { createExpenseType } from '../actions';
 export const metadata = { title: 'New Expense Type' };
 
 export default async function NewExpenseTypePage() {
-
   async function action(formData: FormData) {
     'use server';
     const result = await createExpenseType(formData);

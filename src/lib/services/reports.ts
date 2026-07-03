@@ -1,15 +1,8 @@
 'use server';
 
-import { db } from '@/db';
-import {
-  bookings,
-  expenses,
-  cashWithdrawals,
-  employeeProfiles,
-  packages,
-  cashReports,
-} from '@/db/schema';
 import { and, gte, lt, sql } from 'drizzle-orm';
+import { db } from '@/db';
+import { bookings, cashWithdrawals, employeeProfiles, expenses, packages } from '@/db/schema';
 
 export interface ReportSummary {
   income: number;
@@ -68,9 +61,7 @@ export async function getMonthlyExpenses(year: number, month: number): Promise<n
       total: sql<string>`COALESCE(SUM(${expenses.amount}), 0)`.mapWith(Number),
     })
     .from(expenses)
-    .where(
-      and(gte(expenses.createdAt, startDate), lt(expenses.createdAt, endDate)),
-    );
+    .where(and(gte(expenses.createdAt, startDate), lt(expenses.createdAt, endDate)));
 
   const startDateStr = startDate.toISOString().split('T')[0] ?? '';
   const endDateStr = endDate.toISOString().split('T')[0] ?? '';
@@ -80,9 +71,7 @@ export async function getMonthlyExpenses(year: number, month: number): Promise<n
       total: sql<string>`COALESCE(SUM(${cashWithdrawals.amount}), 0)`.mapWith(Number),
     })
     .from(cashWithdrawals)
-    .where(
-      and(gte(cashWithdrawals.date, startDateStr), lt(cashWithdrawals.date, endDateStr)),
-    );
+    .where(and(gte(cashWithdrawals.date, startDateStr), lt(cashWithdrawals.date, endDateStr)));
 
   return (expensesResult[0]?.total ?? 0) + (withdrawalsResult[0]?.total ?? 0);
 }
@@ -91,8 +80,11 @@ export async function getMonthlyExpenses(year: number, month: number): Promise<n
  * Calculate total salary costs for the month based on employee profiles.
  * Only counts active employees (those with salary set).
  */
-export async function getMonthlySalaries(year: number, month: number): Promise<number> {
-  const employees = await db.select().from(employeeProfiles).where(sql`${employeeProfiles.salary} IS NOT NULL`);
+export async function getMonthlySalaries(_year: number, _month: number): Promise<number> {
+  const employees = await db
+    .select()
+    .from(employeeProfiles)
+    .where(sql`${employeeProfiles.salary} IS NOT NULL`);
 
   let totalSalary = 0;
 
@@ -118,10 +110,7 @@ export async function getMonthlySalaries(year: number, month: number): Promise<n
 /**
  * Get bookings breakdown by package for the month.
  */
-export async function getPackagesTally(
-  year: number,
-  month: number,
-): Promise<PackageTally[]> {
+export async function getPackagesTally(year: number, month: number): Promise<PackageTally[]> {
   const startDate = new Date(year, month - 1, 1);
   const endDate = new Date(year, month, 1);
 
@@ -182,28 +171,22 @@ export async function getMonthlyTrend(year: number, month: number): Promise<Dail
       total: sql<string>`COALESCE(SUM(${expenses.amount}), 0)`.mapWith(Number),
     })
     .from(expenses)
-    .where(
-      and(gte(expenses.createdAt, startDate), lt(expenses.createdAt, endDate)),
-    )
+    .where(and(gte(expenses.createdAt, startDate), lt(expenses.createdAt, endDate)))
     .groupBy(sql`${expenses.createdAt}::date`);
 
   // Merge by date
   const trendMap = new Map<string, { income: number; expenses: number }>();
 
   incomeByDay.forEach((row) => {
-    const date = row.date;
-    if (!trendMap.has(date)) {
-      trendMap.set(date, { income: 0, expenses: 0 });
-    }
-    trendMap.get(date)!.income = row.total;
+    const entry = trendMap.get(row.date) ?? { income: 0, expenses: 0 };
+    entry.income = row.total;
+    trendMap.set(row.date, entry);
   });
 
   expensesByDay.forEach((row) => {
-    const date = row.date;
-    if (!trendMap.has(date)) {
-      trendMap.set(date, { income: 0, expenses: 0 });
-    }
-    trendMap.get(date)!.expenses = row.total;
+    const entry = trendMap.get(row.date) ?? { income: 0, expenses: 0 };
+    entry.expenses = row.total;
+    trendMap.set(row.date, entry);
   });
 
   const trend = Array.from(trendMap.entries())
@@ -223,7 +206,6 @@ export async function getMonthlyTrend(year: number, month: number): Promise<Dail
 export async function getMonthlyForecast(year: number, month: number): Promise<number> {
   const income = await getMonthlyIncome(year, month);
   const today = new Date();
-  const startDate = new Date(year, month - 1, 1);
 
   // Only forecast if we're in the current month
   if (today.getMonth() !== month - 1 || today.getFullYear() !== year) {
@@ -245,10 +227,7 @@ export async function getMonthlyForecast(year: number, month: number): Promise<n
 /**
  * Get complete monthly report summary.
  */
-export async function getMonthlyReport(
-  year: number,
-  month: number,
-): Promise<ReportSummary> {
+export async function getMonthlyReport(year: number, month: number): Promise<ReportSummary> {
   const [income, monthlyExpenses, salaries] = await Promise.all([
     getMonthlyIncome(year, month),
     getMonthlyExpenses(year, month),

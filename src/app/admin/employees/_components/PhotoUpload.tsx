@@ -37,14 +37,15 @@ export default function PhotoUpload({ current, name = 'photo' }: Props) {
         className="group relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-zinc-300 bg-zinc-50 transition-colors hover:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-zinc-500"
       >
         {preview ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={preview} alt="Photo" className="h-full w-full object-cover" />
+          // biome-ignore lint/performance/noImgElement: arbitrary uploaded/data-URL avatar, not a next/image-optimizable static asset
+          <img src={preview} alt="Selected avatar" className="h-full w-full object-cover" />
         ) : (
           <svg
             className="h-8 w-8 text-zinc-300 dark:text-zinc-600"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
+            aria-hidden="true"
           >
             <path
               strokeLinecap="round"

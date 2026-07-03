@@ -14,7 +14,9 @@ import {
   paymentModes,
 } from '@/db/schema';
 import { requireModule } from '@/lib/permissions';
+import { fmtPhDateTime } from '@/lib/timezone';
 import AddonsEditForm from '../_components/AddonsEditForm';
+import AdvanceBookingPill from '../_components/AdvanceBookingPill';
 import NotesForm from '../_components/NotesForm';
 import PackageEditor from '../_components/PackageEditor';
 import PaymentBadge from '../_components/PaymentBadge';
@@ -121,10 +123,7 @@ export default async function BookingDetailPage({ params }: { params: Promise<{ 
     .where(eq(packages.active, true))
     .orderBy(asc(packages.name));
 
-  const fmt = new Intl.DateTimeFormat('en-PH', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  });
+  const fmt = fmtPhDateTime;
 
   const fmtMoney = (v: string) =>
     `₱${parseFloat(v).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
@@ -151,13 +150,18 @@ export default async function BookingDetailPage({ params }: { params: Promise<{ 
           <p className="mt-1 text-sm text-zinc-500">
             {booking.client?.phone} {booking.client?.email ? `· ${booking.client.email}` : ''}
           </p>
+          <AdvanceBookingPill startsAt={booking.startsAt} className="mt-2" />
         </div>
         <StatusBadge status={booking.status} />
       </div>
 
       {/* Status transitions */}
       <div className="mb-8">
-        <StatusTransitionButton bookingId={id} currentStatus={booking.status} />
+        <StatusTransitionButton
+          bookingId={id}
+          currentStatus={booking.status}
+          balanceDue={balanceDue}
+        />
       </div>
 
       {/* Detail grid */}

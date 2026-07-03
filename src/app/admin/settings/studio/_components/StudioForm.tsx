@@ -85,7 +85,7 @@ export function StudioForm({ studioName, logoUrl }: Props) {
         {preview ? (
           <div className="flex items-center gap-4">
             <div className="flex h-20 w-20 items-center justify-center rounded-lg border border-zinc-200 bg-zinc-50 p-2 dark:border-zinc-700 dark:bg-zinc-800">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
+              {/* biome-ignore lint/performance/noImgElement: arbitrary uploaded/data-URL logo, not a next/image-optimizable static asset */}
               <img
                 src={preview}
                 alt="Logo preview"
@@ -114,7 +114,7 @@ export function StudioForm({ studioName, logoUrl }: Props) {
               className="h-4 w-4"
               viewBox="0 0 20 20"
               fill="currentColor"
-              aria-hidden
+              aria-hidden="true"
             >
               <path
                 fillRule="evenodd"

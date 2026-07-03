@@ -1,8 +1,8 @@
 'use client';
 
 import { useActionState } from 'react';
-import type { Role } from '@/db/schema';
 import { assignUserRole } from '@/app/admin/settings/roles/actions';
+import type { Role } from '@/db/schema';
 
 type Props = {
   userId: string;

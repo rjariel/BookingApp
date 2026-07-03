@@ -78,6 +78,7 @@ export default function PackageItemsManager({ packageId, items, allInventoryItem
                   className="w-12 rounded border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-800"
                 />
                 <button
+                  type="button"
                   onClick={async () => {
                     await removePackageItem(packageId, item.itemId);
                   }}

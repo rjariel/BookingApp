@@ -1,6 +1,6 @@
 'use server';
 
-import { and, eq, inArray } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { auth } from '@/auth';
 import { db } from '@/db';
@@ -49,12 +49,12 @@ export async function updateDutyNote(id: string, notes: string) {
 /** Admin removes one or more duty entries. */
 export async function removeDutyEntries(ids: string[]) {
   const session = await auth();
-  if (session?.user?.role !== 'admin') return { error: 'Admin only.' };
+  if (!session?.user?.id || session.user.role !== 'admin') return { error: 'Admin only.' };
 
   await db.delete(dailyDuty).where(inArray(dailyDuty.id, ids));
 
   await logActivity({
-    actorId: session.user.id!,
+    actorId: session.user.id,
     action: 'delete',
     entityType: 'daily_duty',
     summary: { ids },
@@ -67,14 +67,14 @@ export async function removeDutyEntries(ids: string[]) {
 /** Admin adds extra staff to an already-submitted roster. */
 export async function addDutyEntries(_prev: unknown, formData: FormData) {
   const session = await auth();
-  if (session?.user?.role !== 'admin') return { error: 'Admin only.' };
+  if (!session?.user?.id || session.user.role !== 'admin') return { error: 'Admin only.' };
 
   const date = formData.get('date') as string;
   const userIds = formData.getAll('userIds') as string[];
 
   if (userIds.length === 0) return { error: 'Select at least one person.' };
 
-  const rows = userIds.map((userId) => ({ userId, date, updatedBy: session.user?.id! }));
+  const rows = userIds.map((userId) => ({ userId, date, updatedBy: session.user.id }));
   await db.insert(dailyDuty).values(rows).onConflictDoNothing();
 
   revalidatePath('/admin/duty');

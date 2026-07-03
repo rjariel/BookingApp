@@ -3,22 +3,19 @@ import { auth } from '@/auth';
 import { db } from '@/db';
 import { dailyDuty, users } from '@/db/schema';
 import { requireModule } from '@/lib/permissions';
+import { phDateStr } from '@/lib/timezone';
 import AdminAddForm from './_components/AdminAddForm';
 import DutyCheckboxForm from './_components/DutyCheckboxForm';
 import DutyRoster from './_components/DutyRoster';
 
 export const metadata = { title: 'Daily Duty' };
 
-function todayString() {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
-}
-
 export default async function DutyPage() {
   await requireModule('duty');
   const session = await auth();
   const isAdmin = session?.user?.role === 'admin';
 
-  const today = todayString();
+  const today = phDateStr();
 
   // All active non-client users
   const allStaff = await db

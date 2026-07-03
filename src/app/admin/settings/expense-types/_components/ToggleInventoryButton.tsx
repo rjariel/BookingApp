@@ -14,6 +14,7 @@ export default function ToggleInventoryButton({
 
   return (
     <button
+      type="button"
       onClick={() =>
         startTransition(() => void toggleInventoryPurchaseFlag(id, !isInventoryPurchase))
       }

@@ -23,7 +23,11 @@ const MIN_GAP_MIN = 15; // gaps < 15 min are not shown
 /**
  * Returns free time ranges within the working window after subtracting bookings.
  *
- * @param date     The calendar date to compute slots for (local time).
+ * @param date     The start-of-day instant (midnight) of the business day to compute
+ *                 slots for — e.g. `phDayBounds().start`. Must be an absolute instant,
+ *                 not read via local Date getters: the window is built by adding
+ *                 fractional hours as milliseconds, so this is correct regardless of
+ *                 the server process's configured timezone.
  * @param bookings Non-cancelled bookings for that date, any order.
  * @param hours    Open/close hours from store settings (defaults to 09:00–18:00).
  */
@@ -32,17 +36,10 @@ export function computeFreeSlots(
   bookings: BookingSlot[],
   hours: WindowHours = DEFAULT_HOURS,
 ): TimeRange[] {
-  const y = date.getFullYear();
-  const m = date.getMonth();
-  const d = date.getDate();
+  const dayStartMs = date.getTime();
 
-  const openH = Math.floor(hours.openHour);
-  const openM = Math.round((hours.openHour - openH) * 60);
-  const closeH = Math.floor(hours.closeHour);
-  const closeM = Math.round((hours.closeHour - closeH) * 60);
-
-  const windowStart = new Date(y, m, d, openH, openM, 0, 0);
-  const windowEnd = new Date(y, m, d, closeH, closeM, 0, 0);
+  const windowStart = new Date(dayStartMs + hours.openHour * 3_600_000);
+  const windowEnd = new Date(dayStartMs + hours.closeHour * 3_600_000);
 
   // Sort bookings by start time.
   const sorted = [...bookings].sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());

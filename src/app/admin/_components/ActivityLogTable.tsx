@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { PH_TIMEZONE } from '@/lib/timezone';
 
 type LogRow = {
   id: string;
@@ -13,6 +14,7 @@ type LogRow = {
 };
 
 const fmtDateTime = new Intl.DateTimeFormat('en-PH', {
+  timeZone: PH_TIMEZONE,
   month: 'short',
   day: 'numeric',
   hour: 'numeric',

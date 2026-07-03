@@ -47,10 +47,14 @@ export function RoleForm({ action, role, grantedModules = [], isSystem = false }
       {/* Name + Slug */}
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          <label
+            htmlFor="name"
+            className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+          >
             Role Name
           </label>
           <input
+            id="name"
             name="name"
             defaultValue={role?.name ?? ''}
             required
@@ -66,10 +70,14 @@ export function RoleForm({ action, role, grantedModules = [], isSystem = false }
           />
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          <label
+            htmlFor="slug"
+            className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+          >
             Slug
           </label>
           <input
+            id="slug"
             name="slug"
             defaultValue={role?.slug ?? ''}
             required
@@ -90,10 +98,14 @@ export function RoleForm({ action, role, grantedModules = [], isSystem = false }
 
       {/* Description */}
       <div>
-        <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+        <label
+          htmlFor="description"
+          className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+        >
           Description <span className="text-zinc-400">(optional)</span>
         </label>
         <input
+          id="description"
           name="description"
           defaultValue={role?.description ?? ''}
           maxLength={200}
@@ -105,10 +117,14 @@ export function RoleForm({ action, role, grantedModules = [], isSystem = false }
       {/* Base Role + Color */}
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          <label
+            htmlFor="baseRole"
+            className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+          >
             Base Role
           </label>
           <select
+            id="baseRole"
             name="baseRole"
             defaultValue={role?.baseRole ?? 'staff'}
             disabled={isSystem}
@@ -129,7 +145,10 @@ export function RoleForm({ action, role, grantedModules = [], isSystem = false }
           )}
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          <label
+            htmlFor="color-picker"
+            className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+          >
             Badge Color
           </label>
           <div className="flex items-center gap-2">

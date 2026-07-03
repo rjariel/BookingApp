@@ -2,17 +2,13 @@ import { and, asc, eq, gte, lt } from 'drizzle-orm';
 import Link from 'next/link';
 import { db } from '@/db';
 import { bookings, clients, packages } from '@/db/schema';
+import { fmtPhTime, phDayBounds } from '@/lib/timezone';
 import StatusBadge from '../bookings/_components/StatusBadge';
 
-const fmtTime = new Intl.DateTimeFormat('en-PH', {
-  hour: 'numeric',
-  minute: '2-digit',
-});
+const fmtTime = fmtPhTime;
 
 async function getTodaysBookings() {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const end = new Date(start.getTime() + 86_400_000);
+  const { start, end } = phDayBounds();
 
   return db
     .select({

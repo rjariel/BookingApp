@@ -20,6 +20,7 @@ export default function AdminAddForm({ today, remainingStaff }: Props) {
     <div className="mt-4">
       {!open ? (
         <button
+          type="button"
           onClick={() => setOpen(true)}
           className="text-sm text-zinc-500 underline-offset-2 hover:text-zinc-800 hover:underline dark:hover:text-zinc-200"
         >

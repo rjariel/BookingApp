@@ -10,9 +10,10 @@
  *   npm run set-role rey@example.com admin
  *   npm run set-role staff@example.com staff
  */
-import postgres from 'postgres';
-import { drizzle } from 'drizzle-orm/postgres-js';
+
 import { eq } from 'drizzle-orm';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
 import { users } from '../src/db/schema';
 
 const [, , email, roleArg] = process.argv;
@@ -28,7 +29,9 @@ if (roleArg !== 'admin' && roleArg !== 'staff') {
   process.exit(1);
 }
 
-if (!process.env.DATABASE_URL) {
+const databaseUrl = process.env.DATABASE_URL;
+
+if (!databaseUrl) {
   console.error('DATABASE_URL is not set. Add it to .env.local');
   process.exit(1);
 }
@@ -36,7 +39,7 @@ if (!process.env.DATABASE_URL) {
 const role = roleArg as 'admin' | 'staff';
 
 void (async () => {
-  const client = postgres(process.env.DATABASE_URL!);
+  const client = postgres(databaseUrl);
   const db = drizzle(client);
 
   const [user] = await db
@@ -55,10 +58,7 @@ void (async () => {
     process.exit(0);
   }
 
-  await db
-    .update(users)
-    .set({ role })
-    .where(eq(users.id, user.id));
+  await db.update(users).set({ role }).where(eq(users.id, user.id));
 
   console.log(`✓ ${email} role updated to ${role} (id: ${user.id})`);
 })();

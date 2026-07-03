@@ -1,6 +1,6 @@
 'use server';
 
-import { and, eq } from 'drizzle-orm';
+import { and, eq, gte, inArray, lt } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { auth } from '@/auth';
@@ -19,6 +19,7 @@ import {
 } from '@/db/schema';
 import { logActivity } from '@/lib/activity-log';
 import { calcBookingTotal } from '@/lib/pricing';
+import { phMonthBounds } from '@/lib/timezone';
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -346,7 +347,11 @@ export async function updateBookingStatus(id: string, newStatus: string): Promis
   }
 
   const [booking] = await db
-    .select({ status: bookings.status })
+    .select({
+      status: bookings.status,
+      amountTotal: bookings.amountTotal,
+      amountPaid: bookings.amountPaid,
+    })
     .from(bookings)
     .where(eq(bookings.id, id))
     .limit(1);
@@ -359,6 +364,16 @@ export async function updateBookingStatus(id: string, newStatus: string): Promis
       ok: false,
       error: `Cannot transition from "${booking.status}" to "${newStatus}".`,
     };
+  }
+
+  if (newStatus === 'completed') {
+    const balanceDue = parseFloat(booking.amountTotal) - parseFloat(booking.amountPaid);
+    if (balanceDue > 0) {
+      return {
+        ok: false,
+        error: `Cannot mark completed: balance of ₱${balanceDue.toFixed(2)} is still due.`,
+      };
+    }
   }
 
   await db
@@ -648,6 +663,114 @@ export async function updateBookingPackage(
     return { ok: true, data: undefined };
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Failed to update package.';
+    return { ok: false, error: msg };
+  }
+}
+
+// ── clearBookingsForMonth (testing/reset tool) ─────────────────────────
+
+const clearMonthSchema = z.object({
+  month: z.string().regex(/^\d{4}-\d{2}$/, 'Invalid month.'),
+});
+
+/**
+ * Deletes every booking that starts within the given PH calendar month and
+ * releases any inventory it reserved back into stock. Admin-only — meant for
+ * wiping test data between staff test rounds, not day-to-day use.
+ */
+export async function clearBookingsForMonth(
+  month: string,
+): Promise<ActionResult<{ count: number; itemsRestored: number }>> {
+  const session = await auth();
+  if (!session?.user?.id || session.user.role !== 'admin') {
+    return { ok: false, error: 'Only admins can clear bookings.' };
+  }
+
+  const parsed = clearMonthSchema.safeParse({ month });
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid month.' };
+  }
+
+  const actorId = session.user.id;
+  const { start, end } = phMonthBounds(parsed.data.month);
+
+  try {
+    const result = await db.transaction(async (tx) => {
+      const monthBookings = await tx
+        .select({ id: bookings.id })
+        .from(bookings)
+        .where(and(gte(bookings.startsAt, start), lt(bookings.startsAt, end)));
+
+      if (monthBookings.length === 0) {
+        return { count: 0, itemsRestored: 0 };
+      }
+
+      const bookingIds = monthBookings.map((b) => b.id);
+
+      // Tally reserved inventory across all affected bookings so we restore
+      // it in one adjustment per item rather than one per booking.
+      const usedItems = await tx
+        .select({ itemId: bookingItems.itemId, qty: bookingItems.qty })
+        .from(bookingItems)
+        .where(inArray(bookingItems.bookingId, bookingIds));
+
+      const restoreMap = new Map<string, number>();
+      for (const row of usedItems) {
+        restoreMap.set(row.itemId, (restoreMap.get(row.itemId) ?? 0) + row.qty);
+      }
+
+      for (const [itemId, qty] of restoreMap) {
+        const [item] = await tx
+          .select({ quantity: inventoryItems.quantity })
+          .from(inventoryItems)
+          .where(eq(inventoryItems.id, itemId))
+          .limit(1);
+        // Item may have since been deleted — nothing to restore it to.
+        if (!item) continue;
+
+        await tx
+          .update(inventoryItems)
+          .set({ quantity: item.quantity + qty })
+          .where(eq(inventoryItems.id, itemId));
+
+        await tx.insert(stockLedger).values({
+          itemId,
+          delta: qty,
+          type: 'adjustment',
+          bookingId: null,
+          staffId: actorId,
+        });
+      }
+
+      // Drop the old usage ledger rows tied to these bookings — the bookings
+      // themselves are about to be deleted, so keeping orphaned rows around
+      // would just be noise.
+      await tx.delete(stockLedger).where(inArray(stockLedger.bookingId, bookingIds));
+
+      // Cascades to booking_items and booking_addons.
+      await tx.delete(bookings).where(inArray(bookings.id, bookingIds));
+
+      return { count: bookingIds.length, itemsRestored: restoreMap.size };
+    });
+
+    await logActivity({
+      actorId,
+      action: 'clear_month',
+      entityType: 'booking',
+      summary: {
+        month: parsed.data.month,
+        count: result.count,
+        itemsRestored: result.itemsRestored,
+      },
+    });
+
+    revalidatePath('/admin/bookings');
+    revalidatePath('/admin/inventory');
+    revalidatePath('/admin');
+
+    return { ok: true, data: result };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to clear bookings.';
     return { ok: false, error: msg };
   }
 }

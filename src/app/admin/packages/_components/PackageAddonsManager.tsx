@@ -107,6 +107,7 @@ export default function PackageAddonsManager({ packageId, globalAddons, customAd
                   <p className="text-xs text-zinc-500">₱{parseFloat(addon.price).toFixed(2)}</p>
                 </div>
                 <button
+                  type="button"
                   onClick={async () => {
                     if (
                       confirm(
@@ -138,10 +139,14 @@ export default function PackageAddonsManager({ packageId, globalAddons, customAd
 
         <div className="space-y-3">
           <div>
-            <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+            <label
+              htmlFor="custom-addon-name"
+              className="block text-xs font-medium text-zinc-700 dark:text-zinc-300"
+            >
               Add-on Name
             </label>
             <input
+              id="custom-addon-name"
               type="text"
               value={customName}
               onChange={(e) => setCustomName(e.currentTarget.value)}
@@ -151,10 +156,14 @@ export default function PackageAddonsManager({ packageId, globalAddons, customAd
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+            <label
+              htmlFor="custom-addon-price"
+              className="block text-xs font-medium text-zinc-700 dark:text-zinc-300"
+            >
               Price (₱)
             </label>
             <input
+              id="custom-addon-price"
               type="text"
               value={customPrice}
               onChange={(e) => setCustomPrice(e.currentTarget.value)}

@@ -3,18 +3,14 @@ import { db } from '@/db';
 import { bookings } from '@/db/schema';
 import { computeFreeSlots } from '@/lib/availability';
 import { getStoreHours, parseHourFractional } from '@/lib/store-settings';
+import { fmtPhTime, phDayBounds } from '@/lib/timezone';
 
-const fmtTime = new Intl.DateTimeFormat('en-PH', {
-  hour: 'numeric',
-  minute: '2-digit',
-});
+const fmtTime = fmtPhTime;
 
 const CANCELLED_STATUSES = ['cancelled'] as const;
 
 async function getFreeSlots() {
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const tomorrow = new Date(today.getTime() + 86_400_000);
+  const { start: today, end: tomorrow } = phDayBounds();
 
   const [rows, storeHours] = await Promise.all([
     db

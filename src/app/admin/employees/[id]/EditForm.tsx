@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useTransition } from 'react';
+import { cloneElement, isValidElement, useActionState, useId, useTransition } from 'react';
 import PhotoUpload from '../_components/PhotoUpload';
 import { changeEmployeePassword, toggleEmployeeActive, updateEmployee } from '../actions';
 
@@ -25,12 +25,18 @@ type Employee = {
 type Props = { employee: Employee };
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  const id = useId();
+  const control = children as React.ReactElement<{ id?: string }>;
+
   return (
     <div>
-      <label className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+      <label
+        htmlFor={id}
+        className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300"
+      >
         {label}
       </label>
-      {children}
+      {isValidElement(control) ? cloneElement(control, { id }) : children}
     </div>
   );
 }
@@ -51,9 +57,9 @@ export default function EditForm({ employee }: Props) {
 
         {/* Photo */}
         <div>
-          <label className="mb-2 block text-xs font-semibold uppercase tracking-widest text-zinc-400">
+          <p className="mb-2 block text-xs font-semibold uppercase tracking-widest text-zinc-400">
             Photo
-          </label>
+          </p>
           <PhotoUpload current={employee.photo} />
         </div>
 
@@ -83,9 +89,7 @@ export default function EditForm({ employee }: Props) {
 
         {/* Email — display only, can't change here */}
         <div>
-          <label className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
-            Email
-          </label>
+          <p className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">Email</p>
           <p className="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400">
             {employee.email}
           </p>
@@ -101,7 +105,9 @@ export default function EditForm({ employee }: Props) {
             placeholder="e.g. juan_dc"
             className={inputCls}
           />
-          <p className="mt-1 text-xs text-zinc-400">Min. 6 characters. Lowercase letters, numbers, underscores only.</p>
+          <p className="mt-1 text-xs text-zinc-400">
+            Min. 6 characters. Lowercase letters, numbers, underscores only.
+          </p>
         </Field>
 
         <div className="border-t border-zinc-100 dark:border-zinc-800" />
@@ -245,6 +251,7 @@ export default function EditForm({ employee }: Props) {
             : 'Reactivating allows this employee to log in again.'}
         </p>
         <button
+          type="button"
           disabled={activePending}
           onClick={() => startActive(() => toggleEmployeeActive(employee.id, !employee.active))}
           className={`w-full rounded-md py-2 text-sm font-medium disabled:opacity-50 ${

@@ -4,7 +4,9 @@ import { auth } from '@/auth';
 import { db } from '@/db';
 import { activityLog, dailyDuty, users } from '@/db/schema';
 import { hasModule, requireModule } from '@/lib/permissions';
+import { PH_TIMEZONE, phDateStr } from '@/lib/timezone';
 import ActivityLogTable from './_components/ActivityLogTable';
+import AdvanceBookings from './_components/AdvanceBookings';
 import AvailableSlots from './_components/AvailableSlots';
 import LowStockList from './_components/LowStockList';
 import OnDutyToday from './_components/OnDutyToday';
@@ -12,10 +14,6 @@ import SnapshotBar from './_components/SnapshotBar';
 import TodaysBookings from './_components/TodaysBookings';
 
 export const metadata = { title: 'Dashboard' };
-
-function todayString() {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
-}
 
 async function getAllStaff() {
   return db
@@ -71,7 +69,7 @@ export default async function AdminDashboard() {
   await requireModule('dashboard');
   const session = await auth();
   const isAdmin = session?.user?.role === 'admin';
-  const today = todayString();
+  const today = phDateStr();
   const canEditDuty = await hasModule('duty');
 
   const [activityRows, allStaff, dutyRoster] = await Promise.all([
@@ -88,6 +86,7 @@ export default async function AdminDashboard() {
           <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Dashboard</h1>
           <p className="mt-0.5 text-sm text-zinc-500">
             {new Intl.DateTimeFormat('en-PH', {
+              timeZone: PH_TIMEZONE,
               weekday: 'long',
               month: 'long',
               day: 'numeric',
@@ -138,6 +137,10 @@ export default async function AdminDashboard() {
       <div className="grid gap-8 lg:grid-cols-2">
         <Suspense fallback={<Skeleton className="h-48" />}>
           <TodaysBookings />
+        </Suspense>
+
+        <Suspense fallback={<Skeleton className="h-48" />}>
+          <AdvanceBookings />
         </Suspense>
 
         <Suspense fallback={<Skeleton className="h-28" />}>

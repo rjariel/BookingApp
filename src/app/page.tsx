@@ -12,7 +12,7 @@ export default async function Home() {
           <header className="flex flex-col gap-1">
             <div className="flex items-center gap-2.5">
               {studio.logoUrl && (
-                // eslint-disable-next-line @next/next/no-img-element
+                // biome-ignore lint/performance/noImgElement: arbitrary uploaded/data-URL logo, not a next/image-optimizable static asset
                 <img
                   src={studio.logoUrl}
                   alt={studio.studioName}

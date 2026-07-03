@@ -26,9 +26,9 @@ export default function NewEmployeePage() {
       <form action={action} className="space-y-5">
         {/* Photo */}
         <div>
-          <label className="mb-2 block text-xs font-semibold uppercase tracking-widest text-zinc-400">
+          <p className="mb-2 block text-xs font-semibold uppercase tracking-widest text-zinc-400">
             Photo
-          </label>
+          </p>
           <PhotoUpload />
         </div>
 
@@ -37,10 +37,14 @@ export default function NewEmployeePage() {
         {/* Name */}
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+            <label
+              htmlFor="firstName"
+              className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300"
+            >
               First name <span className="text-red-400">*</span>
             </label>
             <input
+              id="firstName"
               name="firstName"
               required
               placeholder="Juan"
@@ -48,10 +52,14 @@ export default function NewEmployeePage() {
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+            <label
+              htmlFor="lastName"
+              className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300"
+            >
               Last name <span className="text-red-400">*</span>
             </label>
             <input
+              id="lastName"
               name="lastName"
               required
               placeholder="Dela Cruz"
@@ -62,10 +70,14 @@ export default function NewEmployeePage() {
 
         {/* Credentials */}
         <div>
-          <label className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+          <label
+            htmlFor="email"
+            className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300"
+          >
             Email <span className="text-red-400">*</span>
           </label>
           <input
+            id="email"
             name="email"
             type="email"
             required
@@ -75,10 +87,14 @@ export default function NewEmployeePage() {
         </div>
 
         <div>
-          <label className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+          <label
+            htmlFor="username"
+            className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300"
+          >
             Username <span className="text-red-400">*</span>
           </label>
           <input
+            id="username"
             name="username"
             required
             minLength={6}
@@ -86,14 +102,20 @@ export default function NewEmployeePage() {
             placeholder="e.g. juan_dc"
             className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:ring-zinc-400"
           />
-          <p className="mt-1 text-xs text-zinc-400">Min. 6 characters. Lowercase letters, numbers, underscores only.</p>
+          <p className="mt-1 text-xs text-zinc-400">
+            Min. 6 characters. Lowercase letters, numbers, underscores only.
+          </p>
         </div>
 
         <div>
-          <label className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+          <label
+            htmlFor="password"
+            className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300"
+          >
             Password <span className="text-red-400">*</span>
           </label>
           <input
+            id="password"
             name="password"
             type="password"
             required
@@ -107,10 +129,14 @@ export default function NewEmployeePage() {
 
         {/* Job info */}
         <div>
-          <label className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+          <label
+            htmlFor="position"
+            className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300"
+          >
             Position
           </label>
           <input
+            id="position"
             name="position"
             placeholder="e.g. Photographer, Editor"
             className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:ring-zinc-400"
@@ -118,10 +144,14 @@ export default function NewEmployeePage() {
         </div>
 
         <div>
-          <label className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+          <label
+            htmlFor="details"
+            className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300"
+          >
             Details
           </label>
           <textarea
+            id="details"
             name="details"
             rows={3}
             placeholder="Bio, skills, emergency contact, etc."
@@ -130,10 +160,14 @@ export default function NewEmployeePage() {
         </div>
 
         <div>
-          <label className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+          <label
+            htmlFor="hireDate"
+            className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300"
+          >
             Hire Date
           </label>
           <input
+            id="hireDate"
             name="hireDate"
             type="date"
             className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:ring-zinc-400"
@@ -149,10 +183,14 @@ export default function NewEmployeePage() {
           </p>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+              <label
+                htmlFor="salary"
+                className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300"
+              >
                 Amount (₱)
               </label>
               <input
+                id="salary"
                 name="salary"
                 type="number"
                 step="0.01"
@@ -162,10 +200,14 @@ export default function NewEmployeePage() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+              <label
+                htmlFor="salaryType"
+                className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300"
+              >
                 Type
               </label>
               <select
+                id="salaryType"
                 name="salaryType"
                 defaultValue="monthly"
                 className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:ring-zinc-400"
@@ -179,10 +221,14 @@ export default function NewEmployeePage() {
         </div>
 
         <div>
-          <label className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+          <label
+            htmlFor="notes"
+            className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300"
+          >
             Admin notes (internal)
           </label>
           <textarea
+            id="notes"
             name="notes"
             rows={2}
             placeholder="Private notes visible only to admins"

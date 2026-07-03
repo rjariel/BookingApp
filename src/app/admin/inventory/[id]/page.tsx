@@ -4,6 +4,7 @@ import { notFound, redirect } from 'next/navigation';
 import { db } from '@/db';
 import { inventoryItems, stockLedger } from '@/db/schema';
 import { requireModule } from '@/lib/permissions';
+import { fmtPhDateTime } from '@/lib/timezone';
 import AdjustStockForm from '../_components/AdjustStockForm';
 import ItemForm from '../_components/ItemForm';
 import ToggleActiveButton from '../_components/ToggleActiveButton';
@@ -106,10 +107,7 @@ export default async function EditItemPage({ params }: Props) {
                     </span>
                   </div>
                   <time className="text-xs text-zinc-400">
-                    {new Intl.DateTimeFormat('en-PH', {
-                      dateStyle: 'medium',
-                      timeStyle: 'short',
-                    }).format(new Date(entry.createdAt))}
+                    {fmtPhDateTime.format(new Date(entry.createdAt))}
                   </time>
                 </div>
               ))}

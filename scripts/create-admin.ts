@@ -4,10 +4,11 @@
  * Usage:
  *   npm run create-admin admin@example.com "Your Name" "s3cure-p4ss"
  */
-import postgres from 'postgres';
-import { drizzle } from 'drizzle-orm/postgres-js';
-import { eq } from 'drizzle-orm';
+
 import { hash } from '@node-rs/argon2';
+import { eq } from 'drizzle-orm';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
 import { users } from '../src/db/schema';
 
 const [, , email, name, password] = process.argv;
@@ -17,13 +18,15 @@ if (!email || !password) {
   process.exit(1);
 }
 
-if (!process.env.DATABASE_URL) {
+const databaseUrl = process.env.DATABASE_URL;
+
+if (!databaseUrl) {
   console.error('DATABASE_URL is not set. Add it to .env.local');
   process.exit(1);
 }
 
 void (async () => {
-  const client = postgres(process.env.DATABASE_URL!);
+  const client = postgres(databaseUrl);
   const db = drizzle(client);
 
   const passwordHash = await hash(password, {

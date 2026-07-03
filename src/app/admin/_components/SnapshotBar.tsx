@@ -1,22 +1,11 @@
 import { and, count, eq, gt, gte, lt, sum } from 'drizzle-orm';
 import { db } from '@/db';
 import { bookings, expenses, paymentModes } from '@/db/schema';
-
-function todayBounds() {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const end = new Date(start.getTime() + 86_400_000);
-  return { start, end };
-}
-
-function todayDateStr() {
-  const now = new Date();
-  return now.toLocaleDateString('en-CA'); // YYYY-MM-DD
-}
+import { phDateStr, phDayBounds } from '@/lib/timezone';
 
 async function getSnapshot() {
-  const { start, end } = todayBounds();
-  const todayStr = todayDateStr();
+  const { start, end } = phDayBounds();
+  const todayStr = phDateStr();
 
   const [counts, revenueByMode, expenseTotal] = await Promise.all([
     db

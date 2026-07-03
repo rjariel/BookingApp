@@ -3,6 +3,7 @@ import { signOut } from '@/auth';
 import type { ModuleSlug } from '@/lib/permissions';
 import { getSessionWithModules } from '@/lib/permissions';
 import { getStudioProfile } from '@/lib/store-settings';
+import packageJson from '../../../package.json';
 import MobileNav from './_components/MobileNav';
 import NavDropdown from './_components/NavDropdown';
 import NavLink from './_components/NavLink';
@@ -87,7 +88,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           {/* Logo + studio name */}
           <div className="flex items-center gap-2">
             {studio.logoUrl && (
-              // eslint-disable-next-line @next/next/no-img-element
+              // biome-ignore lint/performance/noImgElement: arbitrary uploaded/data-URL logo, not a next/image-optimizable static asset
               <img
                 src={studio.logoUrl}
                 alt={studio.studioName}
@@ -101,9 +102,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
           {/* Desktop nav — hidden on mobile */}
           <nav className="hidden items-center gap-0.5 md:flex">
-            {visibleNavGroups.map((group, idx) =>
+            {visibleNavGroups.map((group) =>
               group.label ? (
-                <NavDropdown key={idx} label={group.label} items={group.items} />
+                <NavDropdown key={group.label} label={group.label} items={group.items} />
               ) : (
                 group.items.map((item) => (
                   <NavLink key={item.href} href={item.href} exact={item.href === '/admin'}>
@@ -113,9 +114,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               ),
             )}
             {visibleSettings.length > 0 && <SettingsDropdown items={visibleSettings} />}
-            {isAdmin && (
-              <NavLink href="/admin/roadmap">Roadmap</NavLink>
-            )}
+            {isAdmin && <NavLink href="/admin/roadmap">Roadmap</NavLink>}
           </nav>
         </div>
 
@@ -142,6 +141,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
       {/* Main */}
       <main className="flex-1">{children}</main>
+
+      {/* Footer */}
+      <footer className="border-t border-zinc-200 px-4 py-3 text-center text-xs text-zinc-400 dark:border-zinc-800 dark:text-zinc-600">
+        {studio.studioName} · v{packageJson.version}
+      </footer>
     </div>
   );
 }

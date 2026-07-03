@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { db } from '@/db';
 import { expenses, expenseTypes, inventoryItems, paymentModes, users } from '@/db/schema';
 import { requireModule } from '@/lib/permissions';
+import { fmtPhDateTime } from '@/lib/timezone';
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -42,7 +43,7 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
 
   if (!row) notFound();
 
-  const fmt = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium', timeStyle: 'short' });
+  const fmt = fmtPhDateTime;
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8">

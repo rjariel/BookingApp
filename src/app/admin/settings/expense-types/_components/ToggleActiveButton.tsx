@@ -8,6 +8,7 @@ export default function ToggleActiveButton({ id, active }: { id: string; active:
 
   return (
     <button
+      type="button"
       onClick={() => startTransition(() => void toggleExpenseType(id, !active))}
       disabled={pending}
       className={`rounded-md px-2.5 py-1 text-xs transition-colors disabled:opacity-50 ${

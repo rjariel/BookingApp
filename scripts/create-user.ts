@@ -10,10 +10,11 @@
  *   npm run create-user staff@example.com "Jane Doe" "p4ssword"
  *   npm run create-user boss@example.com "Boss Man" "p4ssword" admin
  */
-import postgres from 'postgres';
-import { drizzle } from 'drizzle-orm/postgres-js';
-import { eq } from 'drizzle-orm';
+
 import { hash } from '@node-rs/argon2';
+import { eq } from 'drizzle-orm';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
 import { users } from '../src/db/schema';
 
 const [, , email, name, password, roleArg] = process.argv;
@@ -23,7 +24,9 @@ if (!email || !password) {
   process.exit(1);
 }
 
-if (!process.env.DATABASE_URL) {
+const databaseUrl = process.env.DATABASE_URL;
+
+if (!databaseUrl) {
   console.error('DATABASE_URL is not set. Add it to .env.local');
   process.exit(1);
 }
@@ -31,7 +34,7 @@ if (!process.env.DATABASE_URL) {
 const role = roleArg === 'admin' ? 'admin' : 'staff';
 
 void (async () => {
-  const client = postgres(process.env.DATABASE_URL!);
+  const client = postgres(databaseUrl);
   const db = drizzle(client);
 
   const [existing] = await db

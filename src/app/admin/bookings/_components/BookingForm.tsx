@@ -60,9 +60,10 @@ export default function BookingForm({ clients, packages, addonsMap, paymentModes
   };
 
   // DateTime — split into date and time for better UX
-  const defaultStartDate = new Date(Date.now() + 60 * 60_000);
-  const defaultDateStr = defaultStartDate.toISOString().split('T')[0];
-  const defaultTimeStr = `${String(defaultStartDate.getHours()).padStart(2, '0')}:${String(defaultStartDate.getMinutes()).padStart(2, '0')}`;
+  const defaultStartDate = new Date();
+  const pad2 = (n: number) => String(n).padStart(2, '0');
+  const defaultDateStr = `${defaultStartDate.getFullYear()}-${pad2(defaultStartDate.getMonth() + 1)}-${pad2(defaultStartDate.getDate())}`;
+  const defaultTimeStr = `${pad2(defaultStartDate.getHours())}:${pad2(defaultStartDate.getMinutes())}`;
 
   const [startDate, setStartDate] = useState(defaultDateStr);
   const [startTime, setStartTime] = useState(defaultTimeStr);
@@ -327,7 +328,9 @@ export default function BookingForm({ clients, packages, addonsMap, paymentModes
           <label className="block">
             <span className={labelCls}>Payment method *</span>
             <select name="paymentModeId" className={inputCls} required>
-              <option value="" disabled>— select —</option>
+              <option value="" disabled>
+                — select —
+              </option>
               {paymentModes.map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.name}

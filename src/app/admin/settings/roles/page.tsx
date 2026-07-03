@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { db } from '@/db';
 import { users } from '@/db/schema';
 import { requireAdmin } from '@/lib/auth-utils';
+import DeleteRoleButton from './_components/DeleteRoleButton';
 import { deleteRole } from './actions';
 
 // useActionState-compatible wrapper — pages can call server actions directly
@@ -90,7 +91,12 @@ export default async function RolesPage() {
                   Edit
                 </Link>
                 {!role.isSystem && (
-                  <DeleteRoleButton roleId={role.id} roleName={role.name} userCount={userCount} />
+                  <DeleteRoleButton
+                    action={deleteRoleAction}
+                    roleId={role.id}
+                    roleName={role.name}
+                    userCount={userCount}
+                  />
                 )}
               </div>
             </div>
@@ -98,36 +104,5 @@ export default async function RolesPage() {
         })}
       </div>
     </div>
-  );
-}
-
-function DeleteRoleButton({
-  roleId,
-  roleName,
-  userCount,
-}: {
-  roleId: string;
-  roleName: string;
-  userCount: number;
-}) {
-  return (
-    <form
-      action={deleteRoleAction}
-      onSubmit={(e) => {
-        const msg =
-          userCount > 0
-            ? `Delete "${roleName}"? ${userCount} user(s) will be moved to the Staff role.`
-            : `Delete "${roleName}"?`;
-        if (!confirm(msg)) e.preventDefault();
-      }}
-    >
-      <input type="hidden" name="roleId" value={roleId} />
-      <button
-        type="submit"
-        className="rounded-md border border-red-200 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950"
-      >
-        Delete
-      </button>
-    </form>
   );
 }

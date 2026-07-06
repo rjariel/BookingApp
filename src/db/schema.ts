@@ -1,5 +1,6 @@
 import { relations } from 'drizzle-orm';
 import {
+  type AnyPgColumn,
   boolean,
   date,
   integer,
@@ -44,6 +45,7 @@ export const bookingStatus = pgEnum('booking_status', [
   'completed',
   'cancelled',
   'no_show',
+  'rebooked',
 ]);
 export const paymentStatus = pgEnum('payment_status', ['unpaid', 'partial', 'paid']);
 export const stockLedgerType = pgEnum('stock_ledger_type', [
@@ -215,6 +217,11 @@ export const bookings = pgTable('bookings', {
   }),
   notes: text('notes'),
   createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  // Set on the *new* booking when it was created by rebooking an earlier one.
+  // The original booking's status flips to 'rebooked' when this is set.
+  rebookedFromId: uuid('rebooked_from_id').references((): AnyPgColumn => bookings.id, {
+    onDelete: 'set null',
+  }),
   ...timestamps,
 });
 
@@ -435,6 +442,14 @@ export const bookingsRelations = relations(bookings, ({ one, many }) => ({
   }),
   addons: many(bookingAddons),
   items: many(bookingItems),
+  // Self-reference for rebooking: this booking's origin (if it was created by rebooking).
+  rebookedFrom: one(bookings, {
+    fields: [bookings.rebookedFromId],
+    references: [bookings.id],
+    relationName: 'rebooking',
+  }),
+  // The booking(s) created by rebooking *this* one (in practice at most one).
+  rebookings: many(bookings, { relationName: 'rebooking' }),
 }));
 
 export const bookingAddonsRelations = relations(bookingAddons, ({ one }) => ({

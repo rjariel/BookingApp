@@ -25,3 +25,12 @@ export function paymentStatusFor(total: number, paid: number): 'unpaid' | 'parti
   if (paid >= total) return 'paid';
   return 'partial';
 }
+
+/**
+ * Rebooking deposit — 50% of the *original* booking's package price, due
+ * up front to hold the new date. Applies regardless of what the new
+ * booking's package/add-ons end up costing.
+ */
+export function rebookingDeposit(originalPackagePrice: number): number {
+  return round2(originalPackagePrice * 0.5);
+}

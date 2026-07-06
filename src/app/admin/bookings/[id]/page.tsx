@@ -13,6 +13,7 @@ import {
   packages,
   paymentModes,
 } from '@/db/schema';
+import { isRebookable } from '@/lib/booking-rules';
 import { requireModule } from '@/lib/permissions';
 import { fmtPhDateTime } from '@/lib/timezone';
 import AddonsEditForm from '../_components/AddonsEditForm';
@@ -46,6 +47,7 @@ export default async function BookingDetailPage({ params }: { params: Promise<{ 
       paymentStatus: bookings.paymentStatus,
       notes: bookings.notes,
       createdAt: bookings.createdAt,
+      rebookedFromId: bookings.rebookedFromId,
       client: { id: clients.id, name: clients.name, phone: clients.phone, email: clients.email },
       package: {
         id: packages.id,
@@ -63,6 +65,25 @@ export default async function BookingDetailPage({ params }: { params: Promise<{ 
     .limit(1);
 
   if (!booking) notFound();
+
+  const canRebook = isRebookable(booking.status);
+
+  const [rebookedInto] =
+    booking.status === 'rebooked'
+      ? await db
+          .select({ id: bookings.id })
+          .from(bookings)
+          .where(eq(bookings.rebookedFromId, id))
+          .limit(1)
+      : [];
+
+  const [rebookedFrom] = booking.rebookedFromId
+    ? await db
+        .select({ id: bookings.id })
+        .from(bookings)
+        .where(eq(bookings.id, booking.rebookedFromId))
+        .limit(1)
+    : [];
 
   // Fetch all active payment modes for the record-payment form
   const allPaymentModes = await db
@@ -151,17 +172,47 @@ export default async function BookingDetailPage({ params }: { params: Promise<{ 
             {booking.client?.phone} {booking.client?.email ? `· ${booking.client.email}` : ''}
           </p>
           <AdvanceBookingPill startsAt={booking.startsAt} className="mt-2" />
+          {rebookedFrom && (
+            <p className="mt-2 text-xs text-zinc-500">
+              Rebooked from{' '}
+              <Link
+                href={`/admin/bookings/${rebookedFrom.id}`}
+                className="underline underline-offset-2 hover:text-zinc-700 dark:hover:text-zinc-300"
+              >
+                {rebookedFrom.id.slice(0, 8)}
+              </Link>
+            </p>
+          )}
+          {rebookedInto && (
+            <p className="mt-2 text-xs text-zinc-500">
+              Rebooked into{' '}
+              <Link
+                href={`/admin/bookings/${rebookedInto.id}`}
+                className="underline underline-offset-2 hover:text-zinc-700 dark:hover:text-zinc-300"
+              >
+                {rebookedInto.id.slice(0, 8)}
+              </Link>
+            </p>
+          )}
         </div>
         <StatusBadge status={booking.status} />
       </div>
 
-      {/* Status transitions */}
-      <div className="mb-8">
+      {/* Status transitions + rebook */}
+      <div className="mb-8 flex flex-wrap items-center gap-2">
         <StatusTransitionButton
           bookingId={id}
           currentStatus={booking.status}
           balanceDue={balanceDue}
         />
+        {canRebook && (
+          <Link
+            href={`/admin/bookings/${id}/rebook`}
+            className="rounded-md border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            Rebook
+          </Link>
+        )}
       </div>
 
       {/* Detail grid */}

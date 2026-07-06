@@ -18,7 +18,8 @@ import {
   stockLedger,
 } from '@/db/schema';
 import { logActivity } from '@/lib/activity-log';
-import { calcBookingTotal } from '@/lib/pricing';
+import { isRebookable } from '@/lib/booking-rules';
+import { calcBookingTotal, rebookingDeposit } from '@/lib/pricing';
 import { phMonthBounds } from '@/lib/timezone';
 
 // ── Types ──────────────────────────────────────────────────────────────
@@ -79,7 +80,15 @@ const statusTransitionMap: Record<string, readonly string[]> = {
   completed: [],
   cancelled: [],
   no_show: [],
+  rebooked: [],
 };
+
+const rebookSchema = z.object({
+  startsAt: z.string().datetime({ offset: true }),
+  amountPaid: z.coerce.number().min(0),
+  paymentModeId: z.string().uuid('Payment method is required'),
+  notes: z.string().max(2000).optional(),
+});
 
 // ── createClient (inline) ──────────────────────────────────────────────
 
@@ -663,6 +672,195 @@ export async function updateBookingPackage(
     return { ok: true, data: undefined };
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Failed to update package.';
+    return { ok: false, error: msg };
+  }
+}
+
+// ── rebookBooking ───────────────────────────────────────────────────────
+
+/**
+ * Rebooks a client onto a new date. Creates a *new* booking (same client and
+ * package as the original, its own payment) tagged via `rebookedFromId`, and
+ * flips the original booking's status to 'rebooked' so it stops holding its
+ * calendar slot. Requires an up-front deposit of 50% of the original
+ * package's price.
+ */
+export async function rebookBooking(
+  originalId: string,
+  formData: FormData,
+): Promise<ActionResult<{ id: string }>> {
+  const session = await auth();
+  if (!session?.user || !['admin', 'staff'].includes(session.user.role)) {
+    return { ok: false, error: 'Unauthorized. Only admins and staff can rebook.' };
+  }
+  const actorId = session.user.id;
+
+  const raw = rebookSchema.safeParse({
+    startsAt: formData.get('startsAt'),
+    amountPaid: formData.get('amountPaid'),
+    paymentModeId: formData.get('paymentModeId'),
+    notes: formData.get('notes') || undefined,
+  });
+  if (!raw.success) {
+    return { ok: false, error: raw.error.issues[0]?.message ?? 'Invalid input.' };
+  }
+  const { startsAt: startsAtStr, amountPaid, paymentModeId, notes } = raw.data;
+
+  const [original] = await db
+    .select({
+      id: bookings.id,
+      clientId: bookings.clientId,
+      packageId: bookings.packageId,
+      status: bookings.status,
+      packagePrice: packages.price,
+      durationMin: packages.durationMin,
+    })
+    .from(bookings)
+    .innerJoin(packages, eq(bookings.packageId, packages.id))
+    .where(eq(bookings.id, originalId))
+    .limit(1);
+
+  if (!original) return { ok: false, error: 'Original booking not found.' };
+
+  if (!isRebookable(original.status)) {
+    return { ok: false, error: `A "${original.status}" booking cannot be rebooked.` };
+  }
+
+  const requiredDeposit = rebookingDeposit(parseFloat(original.packagePrice));
+  if (amountPaid < requiredDeposit) {
+    return {
+      ok: false,
+      error: `Rebooking requires a deposit of at least ₱${requiredDeposit.toFixed(2)} (50% of the original package price).`,
+    };
+  }
+
+  // Validate payment mode up front so the transaction can't fail on it.
+  const [mode] = await db
+    .select({ id: paymentModes.id })
+    .from(paymentModes)
+    .where(eq(paymentModes.id, paymentModeId))
+    .limit(1);
+  if (!mode) return { ok: false, error: 'Selected payment mode not found.' };
+
+  const startsAt = new Date(startsAtStr);
+  const endsAt = new Date(startsAt.getTime() + original.durationMin * 60_000);
+  const amountTotal = parseFloat(original.packagePrice);
+  const paymentStatus = amountPaid >= amountTotal ? 'paid' : amountPaid > 0 ? 'partial' : 'unpaid';
+
+  try {
+    const newBookingId = await db.transaction(async (tx) => {
+      // Re-check status inside the transaction to avoid a race with another
+      // rebook/status-change happening between the read above and here.
+      const [current] = await tx
+        .select({ status: bookings.status })
+        .from(bookings)
+        .where(eq(bookings.id, originalId))
+        .limit(1);
+      if (!current) throw new Error('Original booking not found.');
+      if (!isRebookable(current.status)) {
+        throw new Error(`A "${current.status}" booking cannot be rebooked.`);
+      }
+
+      const [newBooking] = await tx
+        .insert(bookings)
+        .values({
+          clientId: original.clientId,
+          packageId: original.packageId,
+          startsAt,
+          endsAt,
+          amountTotal: String(amountTotal),
+          amountPaid: String(amountPaid),
+          paymentStatus: paymentStatus as 'unpaid' | 'partial' | 'paid',
+          paymentModeId,
+          notes: notes ?? null,
+          createdBy: actorId,
+          rebookedFromId: originalId,
+        })
+        .returning({ id: bookings.id });
+
+      if (!newBooking) throw new Error('Failed to create rebooked booking.');
+
+      await tx.update(bookings).set({ status: 'rebooked' }).where(eq(bookings.id, originalId));
+
+      // Deduct the new session's package-included inventory, same as a
+      // fresh createBooking() would for this package. Without this, the
+      // rebooked session silently consumes items (prints, frames, etc.)
+      // that never get reflected in the stock ledger.
+      const pkgItems = await tx
+        .select({ itemId: packageItems.itemId, qty: packageItems.qty })
+        .from(packageItems)
+        .where(eq(packageItems.packageId, original.packageId));
+
+      if (pkgItems.length > 0) {
+        for (const line of pkgItems) {
+          const [item] = await tx
+            .select({ quantity: inventoryItems.quantity, name: inventoryItems.name })
+            .from(inventoryItems)
+            .where(and(eq(inventoryItems.id, line.itemId), eq(inventoryItems.active, true)))
+            .limit(1);
+
+          if (!item) throw new Error(`Item ${line.itemId} not found or inactive.`);
+          if (item.quantity < line.qty) {
+            throw new Error(
+              `Insufficient stock for "${item.name}" (have ${item.quantity}, need ${line.qty}).`,
+            );
+          }
+
+          await tx
+            .update(inventoryItems)
+            .set({ quantity: item.quantity - line.qty })
+            .where(eq(inventoryItems.id, line.itemId));
+
+          await tx.insert(stockLedger).values({
+            itemId: line.itemId,
+            delta: -line.qty,
+            type: 'usage',
+            bookingId: newBooking.id,
+            staffId: actorId,
+          });
+        }
+
+        await tx.insert(bookingItems).values(
+          pkgItems.map((l) => ({
+            bookingId: newBooking.id,
+            itemId: l.itemId,
+            qty: l.qty,
+          })),
+        );
+      }
+
+      return newBooking.id;
+    });
+
+    await logActivity({
+      actorId,
+      action: 'rebook',
+      entityType: 'booking',
+      entityId: originalId,
+      summary: { rebookedIntoId: newBookingId },
+    });
+    await logActivity({
+      actorId,
+      action: 'create',
+      entityType: 'booking',
+      entityId: newBookingId,
+      summary: { rebookedFromId: originalId, deposit: amountPaid },
+    });
+
+    revalidatePath('/admin/bookings');
+    revalidatePath(`/admin/bookings/${originalId}`);
+    revalidatePath(`/admin/bookings/${newBookingId}`);
+    return { ok: true, data: { id: newBookingId } };
+  } catch (err) {
+    if (isExclusionViolation(err)) {
+      return {
+        ok: false,
+        conflict: true,
+        error:
+          'That time slot overlaps an existing booking for this staff member. Please choose a different time.',
+      };
+    }
+    const msg = err instanceof Error ? err.message : 'Failed to rebook.';
     return { ok: false, error: msg };
   }
 }

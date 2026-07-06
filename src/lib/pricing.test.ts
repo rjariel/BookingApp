@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { type AddonLine, calcBookingTotal, paymentStatusFor } from './pricing';
+import { type AddonLine, calcBookingTotal, paymentStatusFor, rebookingDeposit } from './pricing';
 
 describe('calcBookingTotal', () => {
   it('returns the package price when there are no add-ons', () => {
@@ -31,5 +31,15 @@ describe('paymentStatusFor', () => {
   it('is paid at or above the total', () => {
     expect(paymentStatusFor(2250, 2250)).toBe('paid');
     expect(paymentStatusFor(2250, 3000)).toBe('paid');
+  });
+});
+
+describe('rebookingDeposit', () => {
+  it('is half the original package price', () => {
+    expect(rebookingDeposit(2000)).toBe(1000);
+  });
+
+  it('rounds to 2 decimal places', () => {
+    expect(rebookingDeposit(999)).toBe(499.5);
   });
 });

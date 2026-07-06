@@ -1,4 +1,4 @@
-type Status = 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'no_show';
+type Status = 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'no_show' | 'rebooked';
 
 const styles: Record<Status, string> = {
   pending:
@@ -11,6 +11,8 @@ const styles: Record<Status, string> = {
     'bg-zinc-100 text-zinc-500 ring-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:ring-zinc-700',
   no_show:
     'bg-red-50 text-red-700 ring-red-200 dark:bg-red-950/30 dark:text-red-400 dark:ring-red-800',
+  rebooked:
+    'bg-purple-50 text-purple-700 ring-purple-200 dark:bg-purple-950/30 dark:text-purple-400 dark:ring-purple-800',
 };
 
 const labels: Record<Status, string> = {
@@ -19,6 +21,7 @@ const labels: Record<Status, string> = {
   completed: 'Completed',
   cancelled: 'Cancelled',
   no_show: 'No-show',
+  rebooked: 'Rebooked',
 };
 
 export default function StatusBadge({ status }: { status: string }) {

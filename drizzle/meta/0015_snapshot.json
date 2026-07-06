@@ -1,6 +1,6 @@
 {
-  "id": "d2134238-bd88-4749-a65b-3aaca81569de",
-  "prevId": "62bff878-f52b-4d19-9921-c84a105b1821",
+  "id": "0f4d7f5e-c70d-4ec5-88fd-2174dda3063d",
+  "prevId": "d2134238-bd88-4749-a65b-3aaca81569de",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -377,6 +377,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "rebooked_from_id": {
+          "name": "rebooked_from_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -452,6 +458,19 @@
           "tableTo": "users",
           "columnsFrom": [
             "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "bookings_rebooked_from_id_bookings_id_fk": {
+          "name": "bookings_rebooked_from_id_bookings_id_fk",
+          "tableFrom": "bookings",
+          "tableTo": "bookings",
+          "columnsFrom": [
+            "rebooked_from_id"
           ],
           "columnsTo": [
             "id"

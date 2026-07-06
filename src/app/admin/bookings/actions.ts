@@ -44,6 +44,19 @@ function isExclusionViolation(err: unknown): boolean {
   );
 }
 
+// Drizzle wraps failed queries in `DrizzleQueryError`, whose own `.message` is
+// just "Failed query: <sql>\nparams: <params>" — the real Postgres reason
+// (constraint violation, missing column, etc.) lives on `.cause`. Unwrap it so
+// the UI shows something actionable instead of a raw SQL dump.
+function getErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof Error) {
+    const cause = (err as { cause?: unknown }).cause;
+    if (cause instanceof Error && cause.message) return cause.message;
+    return err.message;
+  }
+  return fallback;
+}
+
 // ── Schemas ────────────────────────────────────────────────────────────
 
 const addonLineSchema = z.object({
@@ -339,8 +352,7 @@ export async function createBooking(formData: FormData): Promise<ActionResult<{ 
           'That time slot overlaps an existing booking for this staff member. Please choose a different time.',
       };
     }
-    const msg = err instanceof Error ? err.message : 'Failed to create booking.';
-    return { ok: false, error: msg };
+    return { ok: false, error: getErrorMessage(err, 'Failed to create booking.') };
   }
 }
 
@@ -588,8 +600,7 @@ export async function updateBookingAddons(id: string, formData: FormData): Promi
     revalidatePath(`/admin/bookings/${id}`);
     return { ok: true, data: undefined };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Failed to update add-ons.';
-    return { ok: false, error: msg };
+    return { ok: false, error: getErrorMessage(err, 'Failed to update add-ons.') };
   }
 }
 
@@ -671,8 +682,7 @@ export async function updateBookingPackage(
     revalidatePath('/admin/bookings');
     return { ok: true, data: undefined };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Failed to update package.';
-    return { ok: false, error: msg };
+    return { ok: false, error: getErrorMessage(err, 'Failed to update package.') };
   }
 }
 
@@ -860,8 +870,7 @@ export async function rebookBooking(
           'That time slot overlaps an existing booking for this staff member. Please choose a different time.',
       };
     }
-    const msg = err instanceof Error ? err.message : 'Failed to rebook.';
-    return { ok: false, error: msg };
+    return { ok: false, error: getErrorMessage(err, 'Failed to rebook.') };
   }
 }
 
@@ -968,7 +977,6 @@ export async function clearBookingsForMonth(
 
     return { ok: true, data: result };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Failed to clear bookings.';
-    return { ok: false, error: msg };
+    return { ok: false, error: getErrorMessage(err, 'Failed to clear bookings.') };
   }
 }

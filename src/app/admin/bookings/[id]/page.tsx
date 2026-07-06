@@ -1,6 +1,7 @@
 import { asc, eq, isNull } from 'drizzle-orm';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { auth } from '@/auth';
 import { db } from '@/db';
 import {
   addons,
@@ -18,6 +19,7 @@ import { requireModule } from '@/lib/permissions';
 import { fmtPhDateTime } from '@/lib/timezone';
 import AddonsEditForm from '../_components/AddonsEditForm';
 import AdvanceBookingPill from '../_components/AdvanceBookingPill';
+import DeleteBookingButton from '../_components/DeleteBookingButton';
 import NotesForm from '../_components/NotesForm';
 import PackageEditor from '../_components/PackageEditor';
 import PaymentBadge from '../_components/PaymentBadge';
@@ -33,6 +35,8 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
 export default async function BookingDetailPage({ params }: { params: Promise<{ id: string }> }) {
   await requireModule('bookings');
+  const session = await auth();
+  const isAdmin = session?.user?.role === 'admin';
   const { id } = await params;
 
   const [booking] = await db
@@ -199,20 +203,23 @@ export default async function BookingDetailPage({ params }: { params: Promise<{ 
       </div>
 
       {/* Status transitions + rebook */}
-      <div className="mb-8 flex flex-wrap items-center gap-2">
-        <StatusTransitionButton
-          bookingId={id}
-          currentStatus={booking.status}
-          balanceDue={balanceDue}
-        />
-        {canRebook && (
-          <Link
-            href={`/admin/bookings/${id}/rebook`}
-            className="rounded-md border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-          >
-            Rebook
-          </Link>
-        )}
+      <div className="mb-8 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusTransitionButton
+            bookingId={id}
+            currentStatus={booking.status}
+            balanceDue={balanceDue}
+          />
+          {canRebook && (
+            <Link
+              href={`/admin/bookings/${id}/rebook`}
+              className="rounded-md border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            >
+              Rebook
+            </Link>
+          )}
+        </div>
+        {isAdmin && <DeleteBookingButton bookingId={id} clientName={booking.client?.name ?? ''} />}
       </div>
 
       {/* Detail grid */}

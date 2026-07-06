@@ -874,6 +874,84 @@ export async function rebookBooking(
   }
 }
 
+// ── deleteBooking ───────────────────────────────────────────────────────
+
+/**
+ * Permanently deletes a single booking and releases any inventory it
+ * reserved back into stock. Admin-only.
+ */
+export async function deleteBooking(id: string): Promise<ActionResult> {
+  const session = await auth();
+  if (!session?.user?.id || session.user.role !== 'admin') {
+    return { ok: false, error: 'Only admins can delete bookings.' };
+  }
+  const actorId = session.user.id;
+
+  const [booking] = await db
+    .select({ id: bookings.id, status: bookings.status, clientId: bookings.clientId })
+    .from(bookings)
+    .where(eq(bookings.id, id))
+    .limit(1);
+
+  if (!booking) return { ok: false, error: 'Booking not found.' };
+
+  try {
+    await db.transaction(async (tx) => {
+      // Restore any inventory this booking reserved.
+      const usedItems = await tx
+        .select({ itemId: bookingItems.itemId, qty: bookingItems.qty })
+        .from(bookingItems)
+        .where(eq(bookingItems.bookingId, id));
+
+      for (const line of usedItems) {
+        const [item] = await tx
+          .select({ quantity: inventoryItems.quantity })
+          .from(inventoryItems)
+          .where(eq(inventoryItems.id, line.itemId))
+          .limit(1);
+        // Item may have since been deleted — nothing to restore it to.
+        if (!item) continue;
+
+        await tx
+          .update(inventoryItems)
+          .set({ quantity: item.quantity + line.qty })
+          .where(eq(inventoryItems.id, line.itemId));
+
+        await tx.insert(stockLedger).values({
+          itemId: line.itemId,
+          delta: line.qty,
+          type: 'adjustment',
+          bookingId: null,
+          staffId: actorId,
+        });
+      }
+
+      // Drop old usage ledger rows tied to this booking — it's about to be
+      // deleted, so keeping orphaned rows around would just be noise.
+      await tx.delete(stockLedger).where(eq(stockLedger.bookingId, id));
+
+      // Cascades to booking_items and booking_addons.
+      await tx.delete(bookings).where(eq(bookings.id, id));
+    });
+
+    await logActivity({
+      actorId,
+      action: 'delete',
+      entityType: 'booking',
+      entityId: id,
+      summary: { status: booking.status, clientId: booking.clientId },
+    });
+
+    revalidatePath('/admin/bookings');
+    revalidatePath('/admin/inventory');
+    revalidatePath('/admin');
+
+    return { ok: true, data: undefined };
+  } catch (err) {
+    return { ok: false, error: getErrorMessage(err, 'Failed to delete booking.') };
+  }
+}
+
 // ── clearBookingsForMonth (testing/reset tool) ─────────────────────────
 
 const clearMonthSchema = z.object({

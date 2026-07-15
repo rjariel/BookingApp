@@ -30,16 +30,23 @@ const MIN_GAP_MIN = 15; // gaps < 15 min are not shown
  *                 the server process's configured timezone.
  * @param bookings Non-cancelled bookings for that date, any order.
  * @param hours    Open/close hours from store settings (defaults to 09:00–18:00).
+ * @param now      Current instant, if known. When provided, the window start is
+ *                 clipped forward to `now` so slots that have already elapsed
+ *                 today are not reported as free. Omit for past/future dates.
  */
 export function computeFreeSlots(
   date: Date,
   bookings: BookingSlot[],
   hours: WindowHours = DEFAULT_HOURS,
+  now?: Date,
 ): TimeRange[] {
   const dayStartMs = date.getTime();
 
-  const windowStart = new Date(dayStartMs + hours.openHour * 3_600_000);
+  const rawWindowStart = new Date(dayStartMs + hours.openHour * 3_600_000);
   const windowEnd = new Date(dayStartMs + hours.closeHour * 3_600_000);
+  const windowStart = now && now > rawWindowStart ? now : rawWindowStart;
+
+  if (windowStart >= windowEnd) return [];
 
   // Sort bookings by start time.
   const sorted = [...bookings].sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());

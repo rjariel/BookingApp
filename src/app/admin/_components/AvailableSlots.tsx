@@ -27,10 +27,15 @@ async function getFreeSlots() {
   ]);
 
   return {
-    slots: computeFreeSlots(today, rows, {
-      openHour: parseHourFractional(storeHours.openTime),
-      closeHour: parseHourFractional(storeHours.closeTime),
-    }),
+    slots: computeFreeSlots(
+      today,
+      rows,
+      {
+        openHour: parseHourFractional(storeHours.openTime),
+        closeHour: parseHourFractional(storeHours.closeTime),
+      },
+      new Date(),
+    ),
     storeHours,
   };
 }

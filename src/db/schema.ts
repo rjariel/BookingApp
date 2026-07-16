@@ -210,9 +210,20 @@ export const bookings = pgTable('bookings', {
   endsAt: timestamp('ends_at', { withTimezone: true }).notNull(),
   status: bookingStatus('status').notNull().default('pending'),
   amountTotal: numeric('amount_total', { precision: 10, scale: 2 }).notNull().default('0'),
+  // Combined amount collected across everything (package deposit + add-ons).
   amountPaid: numeric('amount_paid', { precision: 10, scale: 2 }).notNull().default('0'),
   paymentStatus: paymentStatus('payment_status').notNull().default('unpaid'),
+  // Deposit / package payment mode.
   paymentModeId: uuid('payment_mode_id').references(() => paymentModes.id, {
+    onDelete: 'set null',
+  }),
+  // Subset of amountPaid collected specifically for add-ons — tracked separately so
+  // add-ons (often paid in cash at the studio shop) don't get muddled with the deposit.
+  addonsAmountPaid: numeric('addons_amount_paid', { precision: 10, scale: 2 })
+    .notNull()
+    .default('0'),
+  // Single payment mode covering all add-ons on this booking (not per-line).
+  addonsPaymentModeId: uuid('addons_payment_mode_id').references(() => paymentModes.id, {
     onDelete: 'set null',
   }),
   notes: text('notes'),
@@ -438,6 +449,10 @@ export const bookingsRelations = relations(bookings, ({ one, many }) => ({
   staff: one(users, { fields: [bookings.staffId], references: [users.id] }),
   paymentMode: one(paymentModes, {
     fields: [bookings.paymentModeId],
+    references: [paymentModes.id],
+  }),
+  addonsPaymentMode: one(paymentModes, {
+    fields: [bookings.addonsPaymentModeId],
     references: [paymentModes.id],
   }),
   addons: many(bookingAddons),

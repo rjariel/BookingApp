@@ -109,9 +109,9 @@ export default function AddonsEditForm({
           <button
             type="button"
             onClick={() => setIsEditing(true)}
-            className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+            className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 dark:bg-blue-500"
           >
-            Edit
+            {currentAddons.length > 0 ? 'Edit add-ons' : '+ Add add-ons'}
           </button>
         </div>
         {currentAddons.length > 0 ? (

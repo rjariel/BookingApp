@@ -155,7 +155,7 @@ async function AdminView({ today }: { today: string; actorId: string }) {
     .limit(100);
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 space-y-10">
+    <div className="px-4 py-8 space-y-10">
       <div>
         <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Cash Flow</h1>
         <p className="mt-1 text-sm text-zinc-500">Studio cash overview — all staff, all time.</p>
@@ -375,7 +375,7 @@ async function StaffView({
   const sortedDates = [...allDates].sort((a, b) => (a > b ? -1 : 1)).slice(0, 60);
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8 space-y-10">
+    <div className="px-4 py-8 space-y-10">
       <div>
         <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">My Cash Flow</h1>
         <p className="mt-1 text-sm text-zinc-500">{staffName} · Day-by-day cash log</p>

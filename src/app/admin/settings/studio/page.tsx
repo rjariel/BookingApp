@@ -9,7 +9,7 @@ export default async function StudioProfilePage() {
   const profile = await getStudioProfile();
 
   return (
-    <div className="mx-auto max-w-lg px-4 py-8">
+    <div className="px-4 py-8">
       <div className="mb-6">
         <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Studio Profile</h1>
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">

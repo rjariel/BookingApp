@@ -21,7 +21,7 @@ export default function RoadmapPage() {
   const done = PHASES.filter((p) => p.state === 'done').length;
 
   return (
-    <div className="mx-auto max-w-2xl px-6 py-10">
+    <div className="px-6 py-10">
       <div className="mb-8 flex flex-col gap-2">
         <div className="flex items-center gap-2">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 px-2.5 py-0.5 text-xs font-medium text-zinc-500 dark:border-white/10 dark:text-zinc-400">

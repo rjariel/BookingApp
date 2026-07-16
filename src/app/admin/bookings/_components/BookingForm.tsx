@@ -57,6 +57,8 @@ export default function BookingForm({ clients, packages, addonsMap, paymentModes
   const handlePackageChange = (newPkgId: string) => {
     setSelectedPkgId(newPkgId);
     setSelectedAddons({});
+    setAddonsAmountPaid('');
+    setAddonsPaymentModeId('');
   };
 
   // DateTime — split into date and time for better UX
@@ -77,6 +79,9 @@ export default function BookingForm({ clients, packages, addonsMap, paymentModes
 
   // Add-ons — { addonId: qty }
   const [selectedAddons, setSelectedAddons] = useState<Record<string, number>>({});
+  // Add-ons are paid as one bucket, via a single method — separate from the deposit.
+  const [addonsAmountPaid, setAddonsAmountPaid] = useState('');
+  const [addonsPaymentModeId, setAddonsPaymentModeId] = useState('');
 
   // Inventory items — { itemId: qty }
 
@@ -87,6 +92,7 @@ export default function BookingForm({ clients, packages, addonsMap, paymentModes
     return qty > 0 ? sum + parseFloat(a.price) * qty : sum;
   }, 0);
   const grandTotal = pkgPrice + addonsTotal;
+  const hasAddons = Object.values(selectedAddons).some((qty) => qty > 0);
 
   // Build JSON for hidden fields before submit
   const addonsJson = JSON.stringify(
@@ -102,6 +108,10 @@ export default function BookingForm({ clients, packages, addonsMap, paymentModes
       formData.set('startsAt', localDateTimeToUTCISO(startsAtLocal));
       formData.set('addonsJson', addonsJson);
       formData.set('itemsJson', '[]'); // Auto-deducted from package
+      if (hasAddons) {
+        formData.set('addonsAmountPaid', addonsAmountPaid || '0');
+        formData.set('addonsPaymentModeId', addonsPaymentModeId);
+      }
       return action(formData);
     },
     initialState,
@@ -306,12 +316,52 @@ export default function BookingForm({ clients, packages, addonsMap, paymentModes
               );
             })}
           </div>
+
+          {hasAddons && (
+            <div className="rounded-md border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-900/50">
+              <p className="mb-3 text-xs font-medium text-zinc-500">
+                Add-ons payment — separate from the deposit below (leave blank if unpaid, e.g. to be
+                paid at the shop)
+              </p>
+              <div className="grid grid-cols-2 gap-4">
+                <label className="block">
+                  <span className={labelCls}>Add-ons amount paid</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    placeholder="0.00"
+                    value={addonsAmountPaid}
+                    onChange={(e) => setAddonsAmountPaid(e.target.value)}
+                    className={inputCls}
+                  />
+                </label>
+                <label className="block">
+                  <span className={labelCls}>Add-ons payment method</span>
+                  <select
+                    value={addonsPaymentModeId}
+                    onChange={(e) => setAddonsPaymentModeId(e.target.value)}
+                    className={inputCls}
+                  >
+                    <option value="">— none yet —</option>
+                    {paymentModes.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            </div>
+          )}
         </section>
       )}
 
       {/* ── Payment ───────────────────────────────────────────────── */}
       <section className="space-y-4">
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Payment</h2>
+        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+          Deposit / package payment
+        </h2>
         <div className="grid grid-cols-2 gap-4">
           <label className="block">
             <span className={labelCls}>Amount paid *</span>

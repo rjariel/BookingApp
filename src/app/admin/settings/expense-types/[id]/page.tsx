@@ -26,7 +26,7 @@ export default async function EditExpenseTypePage({ params }: { params: Promise<
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8">
+    <div className="px-4 py-8">
       <div className="mb-6 flex items-center gap-2 text-sm text-zinc-500">
         <Link
           href="/admin/settings/expense-types"

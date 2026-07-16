@@ -11,6 +11,11 @@ type Props = {
   paymentModeId: string | null;
   paymentModes: PaymentMode[];
   action: (formData: FormData) => Promise<{ ok: boolean; error?: string } | undefined>;
+  title?: string;
+  triggerLabel?: string;
+  amountFieldName?: string;
+  modeFieldName?: string;
+  amountHelpText?: string;
 };
 
 const inputCls =
@@ -27,6 +32,11 @@ export default function RecordPaymentForm({
   paymentModeId,
   paymentModes,
   action,
+  title = 'Record payment',
+  triggerLabel = 'Record payment',
+  amountFieldName = 'amountPaid',
+  modeFieldName = 'paymentModeId',
+  amountHelpText = 'New cumulative total paid (₱) — enter full amount collected so far',
 }: Props) {
   const [open, setOpen] = useState(false);
 
@@ -43,16 +53,14 @@ export default function RecordPaymentForm({
         onClick={() => setOpen(true)}
         className="rounded-md bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 dark:bg-emerald-500"
       >
-        Record payment
+        {triggerLabel}
       </button>
     );
   }
 
   return (
     <div className="rounded-md border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-900/50">
-      <h3 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-        Record payment
-      </h3>
+      <h3 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{title}</h3>
 
       {state && !state.ok && (
         <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-400">
@@ -90,11 +98,9 @@ export default function RecordPaymentForm({
 
       <form action={formAction} className="space-y-3">
         <label className="block">
-          <span className="block text-xs font-medium text-zinc-500 mb-1">
-            New cumulative total paid (₱) — enter full amount collected so far
-          </span>
+          <span className="block text-xs font-medium text-zinc-500 mb-1">{amountHelpText}</span>
           <input
-            name="amountPaid"
+            name={amountFieldName}
             type="number"
             step="0.01"
             min="0"
@@ -106,7 +112,7 @@ export default function RecordPaymentForm({
 
         <label className="block">
           <span className="block text-xs font-medium text-zinc-500 mb-1">Payment method</span>
-          <select name="paymentModeId" defaultValue={paymentModeId ?? ''} className={selectCls}>
+          <select name={modeFieldName} defaultValue={paymentModeId ?? ''} className={selectCls}>
             <option value="">— unspecified —</option>
             {paymentModes.map((m) => (
               <option key={m.id} value={m.id}>

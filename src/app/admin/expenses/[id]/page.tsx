@@ -46,7 +46,7 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
   const fmt = fmtPhDateTime;
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8">
+    <div className="px-4 py-8">
       <div className="mb-6 flex items-center gap-2 text-sm text-zinc-500">
         <Link href="/admin/expenses" className="hover:text-zinc-700 dark:hover:text-zinc-300">
           Expenses

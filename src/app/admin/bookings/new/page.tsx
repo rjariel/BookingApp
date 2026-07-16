@@ -58,7 +58,7 @@ export default async function NewBookingPage() {
 
   if (packageList.length === 0) {
     return (
-      <div className="mx-auto max-w-2xl px-4 py-12">
+      <div className="px-4 py-12">
         <div className="rounded-md border border-yellow-200 bg-yellow-50 px-4 py-4 text-sm text-yellow-700 dark:border-yellow-800 dark:bg-yellow-950/30 dark:text-yellow-400">
           No active packages found. Please{' '}
           <Link href="/admin/packages/new" className="underline">
@@ -80,7 +80,7 @@ export default async function NewBookingPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8">
+    <div className="px-4 py-8">
       <div className="mb-6 flex items-center gap-2 text-sm text-zinc-500">
         <Link href="/admin/bookings" className="hover:text-zinc-700 dark:hover:text-zinc-300">
           Bookings

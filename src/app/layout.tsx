@@ -14,7 +14,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable} h-full antialiased`}>
+    <html
+      lang="en"
+      className={`${GeistSans.variable} ${GeistMono.variable} h-full scroll-smooth antialiased`}
+    >
       <body className="flex min-h-full flex-col" suppressHydrationWarning>
         {children}
       </body>

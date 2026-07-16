@@ -8,7 +8,7 @@ export default async function NewRolePage() {
   await requireAdmin();
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8">
+    <div className="px-4 py-8">
       <div className="mb-6">
         <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">New Role</h1>
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">

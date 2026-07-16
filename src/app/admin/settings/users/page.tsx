@@ -22,7 +22,7 @@ export default async function UsersSettingsPage() {
   const otherUsers = allUsers.filter((u) => u.role !== 'admin');
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8">
+    <div className="px-4 py-8">
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Users & Roles</h1>

@@ -28,7 +28,7 @@ export default async function EditRolePage({ params }: Props) {
   const boundUpdate = updateRole.bind(null, role.id);
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8">
+    <div className="px-4 py-8">
       <div className="mb-6">
         <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
           Edit Role — {role.name}

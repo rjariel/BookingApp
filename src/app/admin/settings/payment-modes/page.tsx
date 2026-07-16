@@ -12,7 +12,7 @@ export default async function PaymentModesPage() {
   const modes = await db.select().from(paymentModes).orderBy(asc(paymentModes.createdAt));
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8">
+    <div className="px-4 py-8">
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Payment Modes</h1>

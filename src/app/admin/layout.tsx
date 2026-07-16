@@ -67,8 +67,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <div className="flex min-h-full flex-col">
-      {/* Top nav */}
-      <header className="flex h-12 items-center justify-between border-b border-zinc-200 bg-white px-4 dark:border-zinc-800 dark:bg-zinc-950">
+      {/* Top nav — sticky so it stays visible while scrolling any admin page */}
+      <header className="sticky top-0 z-40 flex h-12 items-center justify-between border-b border-zinc-200 bg-white px-4 dark:border-zinc-800 dark:bg-zinc-950">
         {/* Left: burger (mobile) + logo + desktop nav */}
         <div className="flex items-center gap-3 md:gap-6">
           {/* Burger — mobile only */}

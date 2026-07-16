@@ -83,8 +83,13 @@ const createBookingSchema = z.object({
   addonsJson: z.string().optional().default('[]'),
   itemsJson: z.string().optional().default('[]'),
 
+  // Package/deposit payment — required.
   amountPaid: z.coerce.number().min(0),
   paymentModeId: z.string().uuid('Payment method is required'),
+
+  // Add-ons payment — optional, separate bucket (e.g. paid in cash at the shop).
+  addonsAmountPaid: z.coerce.number().min(0).optional().default(0),
+  addonsPaymentModeId: z.string().uuid().optional().or(z.literal('')),
 });
 
 const statusTransitionMap: Record<string, readonly string[]> = {
@@ -149,6 +154,8 @@ export async function createBooking(formData: FormData): Promise<ActionResult<{ 
     itemsJson: formData.get('itemsJson') || '[]',
     amountPaid: formData.get('amountPaid'),
     paymentModeId: formData.get('paymentModeId'),
+    addonsAmountPaid: formData.get('addonsAmountPaid') || 0,
+    addonsPaymentModeId: formData.get('addonsPaymentModeId') || undefined,
   });
 
   if (!raw.success) {
@@ -167,6 +174,8 @@ export async function createBooking(formData: FormData): Promise<ActionResult<{ 
     itemsJson,
     amountPaid,
     paymentModeId,
+    addonsAmountPaid,
+    addonsPaymentModeId,
   } = raw.data;
 
   // Parse add-on and item lines
@@ -246,19 +255,28 @@ export async function createBooking(formData: FormData): Promise<ActionResult<{ 
         unitPrice: parseFloat(addonPrices[l.addonId] ?? '0'),
         qty: l.qty,
       }));
+      const addonsTotal = addonCalcLines.reduce((sum, l) => sum + l.unitPrice * l.qty, 0);
       const amountTotal = calcBookingTotal(packagePrice, addonCalcLines);
 
-      // 5. Derive payment_status server-side
-      const derivedPaymentStatus =
-        amountPaid >= amountTotal ? 'paid' : amountPaid > 0 ? 'partial' : 'unpaid';
+      // Add-ons are paid via a single, separate bucket (e.g. cash at the shop) —
+      // can't exceed what the add-ons actually cost.
+      const cappedAddonsAmountPaid = Math.min(addonsAmountPaid, addonsTotal);
+      const combinedAmountPaid = amountPaid + cappedAddonsAmountPaid;
 
-      // Validate payment mode
-      const [mode] = await tx
-        .select({ id: paymentModes.id })
-        .from(paymentModes)
-        .where(eq(paymentModes.id, paymentModeId))
-        .limit(1);
-      if (!mode) throw new Error('Selected payment mode not found.');
+      // 5. Derive payment_status server-side (combined package + add-ons)
+      const derivedPaymentStatus =
+        combinedAmountPaid >= amountTotal ? 'paid' : combinedAmountPaid > 0 ? 'partial' : 'unpaid';
+
+      // Validate payment modes
+      const allModeRows = await tx.select({ id: paymentModes.id }).from(paymentModes);
+      const validModeIds = new Set(allModeRows.map((m) => m.id));
+      if (!validModeIds.has(paymentModeId)) throw new Error('Selected payment mode not found.');
+      if (cappedAddonsAmountPaid > 0) {
+        if (!addonsPaymentModeId) throw new Error('Add-ons payment method is required.');
+        if (!validModeIds.has(addonsPaymentModeId)) {
+          throw new Error('Selected add-ons payment mode not found.');
+        }
+      }
 
       // 6. Insert booking (exclusion constraint fires here on overlap)
       const [booking] = await tx
@@ -269,9 +287,11 @@ export async function createBooking(formData: FormData): Promise<ActionResult<{ 
           startsAt,
           endsAt,
           amountTotal: String(amountTotal),
-          amountPaid: String(amountPaid),
+          amountPaid: String(combinedAmountPaid),
           paymentStatus: derivedPaymentStatus as 'unpaid' | 'partial' | 'paid',
           paymentModeId,
+          addonsAmountPaid: String(cappedAddonsAmountPaid),
+          addonsPaymentModeId: cappedAddonsAmountPaid > 0 ? addonsPaymentModeId || null : null,
           notes: notes ?? null,
           createdBy: actorId,
         })
@@ -442,7 +462,7 @@ export async function updateBookingNotes(id: string, formData: FormData): Promis
   return { ok: true, data: undefined };
 }
 
-// ── updateBookingPayment ───────────────────────────────────────────────
+// ── updateBookingPayment (package / deposit portion) ────────────────────
 
 const updatePaymentSchema = z.object({
   amountPaid: z.coerce.number().min(0),
@@ -459,22 +479,43 @@ export async function updateBookingPayment(id: string, formData: FormData): Prom
   if (!raw.success) return { ok: false, error: raw.error.issues[0]?.message ?? 'Invalid input.' };
 
   const [booking] = await db
-    .select({ id: bookings.id, amountTotal: bookings.amountTotal })
+    .select({
+      id: bookings.id,
+      amountTotal: bookings.amountTotal,
+      addonsAmountPaid: bookings.addonsAmountPaid,
+    })
     .from(bookings)
     .where(eq(bookings.id, id))
     .limit(1);
   if (!booking) return { ok: false, error: 'Booking not found.' };
 
   const total = parseFloat(booking.amountTotal);
-  const paid = raw.data.amountPaid;
-  const paymentStatus = paid <= 0 ? 'unpaid' : paid >= total ? 'paid' : 'partial';
+  const addonsAmountPaid = parseFloat(booking.addonsAmountPaid);
+  // `amountPaid` here is the *package/deposit* portion the staff enters. Combine
+  // with the (untouched) add-ons portion to get the ledger's amountPaid.
+  const packagePaid = raw.data.amountPaid;
+
+  // Guard against the confusing half-saved state where a payment method gets
+  // recorded but the amount field was left at 0 — the "Payment method" label
+  // would then show e.g. "Cash" while the balance still reads as fully unpaid.
+  if (raw.data.paymentModeId && packagePaid <= 0) {
+    return {
+      ok: false,
+      error: 'Enter the amount collected before selecting a payment method.',
+    };
+  }
+
+  const combinedPaid = packagePaid + addonsAmountPaid;
+  const paymentStatus = combinedPaid <= 0 ? 'unpaid' : combinedPaid >= total ? 'paid' : 'partial';
 
   await db
     .update(bookings)
     .set({
-      amountPaid: String(paid),
+      amountPaid: String(combinedPaid),
       paymentStatus,
-      paymentModeId: raw.data.paymentModeId || null,
+      // Defense in depth: never persist a payment method against a zero
+      // package payment, even if the guard above is ever bypassed.
+      paymentModeId: packagePaid > 0 ? raw.data.paymentModeId || null : null,
     })
     .where(eq(bookings.id, id));
 
@@ -483,7 +524,96 @@ export async function updateBookingPayment(id: string, formData: FormData): Prom
     action: 'update_payment',
     entityType: 'booking',
     entityId: id,
-    summary: { amountPaid: paid, paymentStatus },
+    summary: { amountPaid: combinedPaid, paymentStatus },
+  });
+
+  revalidatePath(`/admin/bookings/${id}`);
+  revalidatePath('/admin');
+  return { ok: true, data: undefined };
+}
+
+// ── updateBookingAddonsPayment (add-ons portion, separate bucket) ───────
+
+const updateAddonsPaymentSchema = z.object({
+  addonsAmountPaid: z.coerce.number().min(0),
+  addonsPaymentModeId: z.string().uuid().optional().or(z.literal('')),
+});
+
+export async function updateBookingAddonsPayment(
+  id: string,
+  formData: FormData,
+): Promise<ActionResult> {
+  const actorId = await getActorId();
+
+  const raw = updateAddonsPaymentSchema.safeParse({
+    addonsAmountPaid: formData.get('addonsAmountPaid'),
+    addonsPaymentModeId: formData.get('addonsPaymentModeId') || undefined,
+  });
+  if (!raw.success) return { ok: false, error: raw.error.issues[0]?.message ?? 'Invalid input.' };
+
+  const [booking] = await db
+    .select({
+      id: bookings.id,
+      amountTotal: bookings.amountTotal,
+      amountPaid: bookings.amountPaid,
+      addonsAmountPaid: bookings.addonsAmountPaid,
+    })
+    .from(bookings)
+    .where(eq(bookings.id, id))
+    .limit(1);
+  if (!booking) return { ok: false, error: 'Booking not found.' };
+
+  const [addonRows] = await Promise.all([
+    db
+      .select({ unitPrice: bookingAddons.unitPrice, qty: bookingAddons.qty })
+      .from(bookingAddons)
+      .where(eq(bookingAddons.bookingId, id)),
+  ]);
+  const addonsTotal = addonRows.reduce((sum, r) => sum + parseFloat(r.unitPrice) * r.qty, 0);
+
+  if (raw.data.addonsAmountPaid > addonsTotal + 0.01) {
+    return {
+      ok: false,
+      error: `Add-ons amount paid can't exceed the add-ons total (₱${addonsTotal.toFixed(2)}).`,
+    };
+  }
+
+  // Guard against the confusing half-saved state where a payment method gets
+  // recorded but the amount field was left at 0 — the "Payment method" label
+  // would then show e.g. "Cash" while the add-ons balance still reads as
+  // fully unpaid.
+  if (raw.data.addonsPaymentModeId && raw.data.addonsAmountPaid <= 0) {
+    return {
+      ok: false,
+      error: 'Enter the amount collected before selecting a payment method.',
+    };
+  }
+
+  const total = parseFloat(booking.amountTotal);
+  const currentAmountPaid = parseFloat(booking.amountPaid);
+  const currentAddonsAmountPaid = parseFloat(booking.addonsAmountPaid);
+  const newAddonsAmountPaid = raw.data.addonsAmountPaid;
+  const newAmountPaid = currentAmountPaid + (newAddonsAmountPaid - currentAddonsAmountPaid);
+  const paymentStatus = newAmountPaid <= 0 ? 'unpaid' : newAmountPaid >= total ? 'paid' : 'partial';
+
+  await db
+    .update(bookings)
+    .set({
+      addonsAmountPaid: String(newAddonsAmountPaid),
+      // Defense in depth: never persist a payment method against a zero
+      // add-ons payment, even if the guard above is ever bypassed.
+      addonsPaymentModeId: newAddonsAmountPaid > 0 ? raw.data.addonsPaymentModeId || null : null,
+      amountPaid: String(newAmountPaid),
+      paymentStatus,
+    })
+    .where(eq(bookings.id, id));
+
+  await logActivity({
+    actorId,
+    action: 'update_addons_payment',
+    entityType: 'booking',
+    entityId: id,
+    summary: { addonsAmountPaid: newAddonsAmountPaid, paymentStatus },
   });
 
   revalidatePath(`/admin/bookings/${id}`);
@@ -552,6 +682,7 @@ export async function updateBookingAddons(id: string, formData: FormData): Promi
         unitPrice: parseFloat(addonPrices[l.addonId] ?? '0'),
         qty: l.qty,
       }));
+      const addonsTotal = addonCalcLines.reduce((sum, l) => sum + l.unitPrice * l.qty, 0);
       const amountTotal = calcBookingTotal(packagePrice, addonCalcLines);
 
       // Delete old booking_addons
@@ -569,21 +700,29 @@ export async function updateBookingAddons(id: string, formData: FormData): Promi
         );
       }
 
-      // Update booking total (keep payment status derived from current payment)
+      // Update booking total. If the add-ons total shrank below what was already
+      // recorded as paid for add-ons, clamp it down and pull the combined
+      // amountPaid back in step — can't have "paid" more than the add-ons now cost.
       const [currentBooking] = await tx
-        .select({ amountPaid: bookings.amountPaid })
+        .select({ amountPaid: bookings.amountPaid, addonsAmountPaid: bookings.addonsAmountPaid })
         .from(bookings)
         .where(eq(bookings.id, id))
         .limit(1);
 
-      const amountPaid = parseFloat(currentBooking?.amountPaid ?? '0');
+      const currentAmountPaid = parseFloat(currentBooking?.amountPaid ?? '0');
+      const currentAddonsAmountPaid = parseFloat(currentBooking?.addonsAmountPaid ?? '0');
+      const newAddonsAmountPaid = Math.min(currentAddonsAmountPaid, addonsTotal);
+      const newAmountPaid = currentAmountPaid + (newAddonsAmountPaid - currentAddonsAmountPaid);
+
       const newPaymentStatus =
-        amountPaid <= 0 ? 'unpaid' : amountPaid >= amountTotal ? 'paid' : 'partial';
+        newAmountPaid <= 0 ? 'unpaid' : newAmountPaid >= amountTotal ? 'paid' : 'partial';
 
       await tx
         .update(bookings)
         .set({
           amountTotal: String(amountTotal),
+          amountPaid: String(newAmountPaid),
+          addonsAmountPaid: String(newAddonsAmountPaid),
           paymentStatus: newPaymentStatus as 'unpaid' | 'partial' | 'paid',
         })
         .where(eq(bookings.id, id));

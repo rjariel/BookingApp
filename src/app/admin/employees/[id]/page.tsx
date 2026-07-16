@@ -40,7 +40,7 @@ export default async function EditEmployeePage({ params }: Props) {
   if (!row) notFound();
 
   return (
-    <div className="mx-auto max-w-xl px-4 py-8">
+    <div className="px-4 py-8">
       <div className="mb-6 flex items-center gap-3">
         <Link
           href="/admin/employees"

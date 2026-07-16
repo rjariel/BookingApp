@@ -43,7 +43,7 @@ export default async function EmployeesPage() {
     r.firstName && r.lastName ? `${r.firstName} ${r.lastName}` : (r.name ?? r.email);
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8">
+    <div className="px-4 py-8">
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Employees</h1>

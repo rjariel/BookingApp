@@ -29,7 +29,7 @@ export default async function ExpensesPage() {
     .limit(200);
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8">
+    <div className="px-4 py-8">
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Expenses</h1>

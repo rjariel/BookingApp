@@ -1,4 +1,5 @@
 import { and, eq, ne } from 'drizzle-orm';
+import Link from 'next/link';
 import { auth } from '@/auth';
 import { db } from '@/db';
 import { dailyDuty, users } from '@/db/schema';
@@ -51,10 +52,18 @@ export default async function DutyPage() {
   const rosterSubmitted = roster.length > 0;
 
   return (
-    <div className="mx-auto max-w-xl px-4 py-8">
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Daily Duty</h1>
-        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{fmt}</p>
+    <div className="px-4 py-8">
+      <div className="mb-6 flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Daily Duty</h1>
+          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{fmt}</p>
+        </div>
+        <Link
+          href="/admin/duty/history"
+          className="rounded-md border border-zinc-200 px-3 py-1.5 text-sm text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+        >
+          View history
+        </Link>
       </div>
 
       {!rosterSubmitted ? (

@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useActionState, useState } from 'react';
 import { replaceDutyRoster } from '../duty/actions';
 
@@ -28,15 +29,23 @@ export default function OnDutyToday({ today, allStaff, currentDuty, canEdit }: P
     <div>
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">On Duty</h3>
-        {canEdit && (
-          <button
-            type="button"
-            onClick={() => setShowModal(!showModal)}
-            className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+        <div className="flex items-center gap-3">
+          <Link
+            href="/admin/duty/history"
+            className="text-xs text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
           >
-            {showModal ? 'Done' : 'Edit'}
-          </button>
-        )}
+            History
+          </Link>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setShowModal(!showModal)}
+              className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+            >
+              {showModal ? 'Done' : 'Edit'}
+            </button>
+          )}
+        </div>
       </div>
 
       {currentDuty.length === 0 ? (

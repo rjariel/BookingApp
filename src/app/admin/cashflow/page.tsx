@@ -1,10 +1,19 @@
-import { desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, ilike, lt, or, sql } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
+import type { ReactNode } from 'react';
 import { auth } from '@/auth';
 import { db } from '@/db';
-import { cashIncome, cashReports, cashWithdrawals, expenses, users } from '@/db/schema';
+import {
+  bookings,
+  cashIncome,
+  cashReports,
+  cashWithdrawals,
+  expenses,
+  paymentModes,
+  users,
+} from '@/db/schema';
 import { requireModule } from '@/lib/permissions';
-import { phDateStr } from '@/lib/timezone';
+import { phDateStr, phDayBounds } from '@/lib/timezone';
 import CashReportForm from './_components/CashReportForm';
 import IncomeForm from './_components/IncomeForm';
 import WithdrawalForm from './_components/WithdrawalForm';
@@ -13,6 +22,22 @@ export const metadata = { title: 'Cash Flow' };
 
 const fmt = (v: string | number | null) =>
   `₱${parseFloat(String(v ?? 0)).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
+
+// Marks a figure as computed automatically from booking data, as opposed to
+// manually entered/self-reported by staff — see the legend above each table.
+function AutoIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      className={`inline-block h-3 w-3 text-amber-500 dark:text-amber-400 ${className}`}
+      aria-hidden="true"
+    >
+      <title>Automated</title>
+      <path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z" />
+    </svg>
+  );
+}
 
 function varianceBadge(variance: number) {
   if (Math.abs(variance) < 0.01) {
@@ -95,6 +120,128 @@ async function AdminView({ today }: { today: string; actorId: string }) {
   const todayOut = parseFloat(todayExpRow?.total ?? '0');
   const todayNet = todayIn - todayOut;
 
+  // 2b. Booking income for today — an independent, system-derived cross-check
+  // against the manually-reported `todayIn` above. Covers bookings happening
+  // today (any amount paid so far) plus advance bookings for a future date
+  // whose deposit was taken today. `amountPaid` already combines the package
+  // deposit and add-ons payment (see bookings/actions.ts), so it's summed
+  // alone — adding `addonsAmountPaid` on top would double-count it.
+  const { start: todayStart, end: todayEnd } = phDayBounds(new Date(`${today}T00:00:00+08:00`));
+  const todaysBookingRows = await db
+    .select({ amountPaid: bookings.amountPaid })
+    .from(bookings)
+    .where(
+      and(
+        sql`${bookings.status} IN ('completed','confirmed')`,
+        or(
+          and(gte(bookings.startsAt, todayStart), lt(bookings.startsAt, todayEnd)),
+          and(gte(bookings.createdAt, todayStart), lt(bookings.createdAt, todayEnd)),
+        ),
+      ),
+    );
+  const todayBookingIncome = todaysBookingRows.reduce(
+    (sum, r) => sum + parseFloat(r.amountPaid),
+    0,
+  );
+  const bookingIncomeVariance = todayIn - todayBookingIncome;
+
+  // 2c. Daily booking income, cash vs. total — last 60 days. Bucketed by the
+  // date the payment was actually taken (`createdAt`, in PH time), not the
+  // booking's event date — so an advance booking's deposit shows up on the
+  // day it was paid, matching the "Expected" figures above. Known limit: a
+  // booking's `amountPaid`/`addonsAmountPaid` are running totals, not a
+  // payment-event ledger — if a balance is paid on a *different* day than
+  // the deposit (e.g. cash on the shoot day), that later payment isn't
+  // separately visible; it's folded into the original (deposit) day's total.
+  const sixtyDaysAgo = new Date(Date.now() - 60 * 86_400_000);
+
+  const [cashModes, dailyBookingRows, dailyReportRows] = await Promise.all([
+    db.select({ id: paymentModes.id }).from(paymentModes).where(ilike(paymentModes.name, 'cash')),
+    db
+      .select({
+        amountPaid: bookings.amountPaid,
+        addonsAmountPaid: bookings.addonsAmountPaid,
+        paymentModeId: bookings.paymentModeId,
+        addonsPaymentModeId: bookings.addonsPaymentModeId,
+        createdAt: bookings.createdAt,
+      })
+      .from(bookings)
+      .where(
+        and(
+          sql`${bookings.status} IN ('completed','confirmed')`,
+          gte(bookings.createdAt, sixtyDaysAgo),
+        ),
+      ),
+    db
+      .select({
+        date: cashReports.date,
+        staffName: users.name,
+        notes: cashReports.notes,
+        amountReported: cashReports.amountReported,
+      })
+      .from(cashReports)
+      .innerJoin(users, eq(cashReports.staffId, users.id))
+      .where(gte(cashReports.date, phDateStr(sixtyDaysAgo))),
+  ]);
+
+  const cashModeIds = new Set(cashModes.map((m) => m.id));
+
+  const dailyTotals = new Map<string, { cash: number; total: number }>();
+  for (const row of dailyBookingRows) {
+    const date = phDateStr(row.createdAt);
+    const addonsPaid = parseFloat(row.addonsAmountPaid);
+    const packagePaid = parseFloat(row.amountPaid) - addonsPaid;
+    const cashAmount =
+      (row.paymentModeId && cashModeIds.has(row.paymentModeId) ? packagePaid : 0) +
+      (row.addonsPaymentModeId && cashModeIds.has(row.addonsPaymentModeId) ? addonsPaid : 0);
+    const totalAmount = packagePaid + addonsPaid;
+
+    const entry = dailyTotals.get(date) ?? { cash: 0, total: 0 };
+    entry.cash += cashAmount;
+    entry.total += totalAmount;
+    dailyTotals.set(date, entry);
+  }
+
+  const dailyNotes = new Map<string, string[]>();
+  const dailyReported = new Map<string, number>();
+  for (const row of dailyReportRows) {
+    if (row.notes) {
+      const list = dailyNotes.get(row.date) ?? [];
+      list.push(`${row.staffName ?? 'Staff'}: ${row.notes}`);
+      dailyNotes.set(row.date, list);
+    }
+    dailyReported.set(
+      row.date,
+      (dailyReported.get(row.date) ?? 0) + parseFloat(row.amountReported),
+    );
+  }
+
+  // Union of dates with booking income and/or an EOD report, so a day with a
+  // report but no bookings (or vice versa) still gets a row.
+  const allDates = new Set([...dailyTotals.keys(), ...dailyReported.keys()]);
+
+  const dailyBreakdown = Array.from(allDates)
+    .map((date) => {
+      const { cash, total } = dailyTotals.get(date) ?? { cash: 0, total: 0 };
+      return {
+        date,
+        cash,
+        total,
+        reported: dailyReported.get(date) ?? null,
+        notes: dailyNotes.get(date)?.join(' · ') ?? '',
+      };
+    })
+    .sort((a, b) => b.date.localeCompare(a.date));
+
+  const dailyBreakdownTotals = dailyBreakdown.reduce(
+    (acc, row) => ({
+      cash: acc.cash + row.cash,
+      total: acc.total + row.total,
+      reported: acc.reported + (row.reported ?? 0),
+    }),
+    { cash: 0, total: 0, reported: 0 },
+  );
+
   // 3. All staff EOD reports (last 90 days) with staff name
   const reports = await db
     .select({
@@ -175,11 +322,116 @@ async function AdminView({ today }: { today: string; actorId: string }) {
           Today — {today}
         </p>
         <div className="flex flex-wrap gap-8">
-          <Stat label="Collected" value={fmt(todayIn)} />
+          <Stat label="Collected (reported)" value={fmt(todayIn)} />
+          <Stat
+            label={
+              <>
+                <AutoIcon /> Booking income (auto)
+              </>
+            }
+            value={fmt(todayBookingIncome)}
+          />
           <Stat label="Expenses" value={fmt(todayOut)} />
           <Stat label="Net" value={fmt(todayNet)} bold />
         </div>
+        <p className="mt-3 text-xs text-zinc-500">
+          Booking income is computed automatically from today's bookings and advance bookings paid
+          today (packages + add-ons) — an independent check against the manually reported total.{' '}
+          {Math.abs(bookingIncomeVariance) < 0.01 ? (
+            <span className="font-medium text-emerald-600 dark:text-emerald-400">
+              ✓ matches reported income
+            </span>
+          ) : (
+            <>
+              Differs by{' '}
+              <span className="font-medium">
+                {bookingIncomeVariance > 0 ? '' : '−'}
+                {fmt(Math.abs(bookingIncomeVariance))}
+              </span>{' '}
+              from what was reported.
+            </>
+          )}
+        </p>
       </div>
+
+      {/* Daily booking income — cash vs. total, system-computed */}
+      <section>
+        <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mb-1">
+          Daily booking income — cash vs. total
+        </h2>
+        <p className="mb-1 text-xs text-zinc-500">
+          Bucketed by the date each payment was taken. Last 60 days. "Reported EOD" is the sum of
+          staff cash counts submitted for that date; notes are pulled from those same reports.
+        </p>
+        <p className="mb-3 flex items-center gap-1.5 text-xs text-zinc-500">
+          <AutoIcon /> = calculated automatically from booking data, not typed in by staff.
+        </p>
+        {dailyBreakdown.length === 0 ? (
+          <p className="text-sm text-zinc-400">No booking income in the last 60 days.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-zinc-200 text-left text-xs text-zinc-500 dark:border-zinc-800">
+                  <th className="pb-2 pr-4 font-medium">Date</th>
+                  <th className="pb-2 pr-4 text-right font-medium">
+                    <span className="inline-flex items-center gap-1">
+                      <AutoIcon /> Paid in cash (studio)
+                    </span>
+                  </th>
+                  <th className="pb-2 pr-4 text-right font-medium">
+                    <span className="inline-flex items-center gap-1">
+                      <AutoIcon /> Total for the day
+                    </span>
+                  </th>
+                  <th className="pb-2 pr-4 text-right font-medium">Reported EOD</th>
+                  <th className="pb-2 font-medium">Notes</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                {dailyBreakdown.map((row) => (
+                  <tr key={row.date}>
+                    <td className="py-3 pr-4 text-zinc-500 whitespace-nowrap">{row.date}</td>
+                    <td className="py-3 pr-4 text-right font-medium text-zinc-800 dark:text-zinc-200 whitespace-nowrap">
+                      {fmt(row.cash)}
+                    </td>
+                    <td className="py-3 pr-4 text-right font-medium text-zinc-800 dark:text-zinc-200 whitespace-nowrap">
+                      {fmt(row.total)}
+                    </td>
+                    <td className="py-3 pr-4 text-right font-medium text-zinc-800 dark:text-zinc-200 whitespace-nowrap">
+                      {row.reported !== null ? (
+                        fmt(row.reported)
+                      ) : (
+                        <span className="text-zinc-400 text-xs font-normal">not submitted</span>
+                      )}
+                    </td>
+                    <td className="py-3 text-zinc-400 text-xs max-w-[240px] truncate">
+                      {row.notes || '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t border-zinc-200 dark:border-zinc-800">
+                  <td className="py-3 pr-4 font-semibold text-zinc-900 dark:text-zinc-100">
+                    Total ({dailyBreakdown.length} day{dailyBreakdown.length === 1 ? '' : 's'})
+                  </td>
+                  <td className="py-3 pr-4 text-right font-semibold text-zinc-900 dark:text-zinc-100 whitespace-nowrap">
+                    {fmt(dailyBreakdownTotals.cash)}
+                  </td>
+                  <td className="py-3 pr-4 text-right font-semibold text-zinc-900 dark:text-zinc-100 whitespace-nowrap">
+                    {fmt(dailyBreakdownTotals.total)}
+                  </td>
+                  <td className="py-3 pr-4 text-right font-semibold text-zinc-900 dark:text-zinc-100 whitespace-nowrap">
+                    {fmt(dailyBreakdownTotals.reported)}
+                  </td>
+                  <td />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </section>
 
       {/* Record income / withdrawal */}
       <div className="grid gap-8 sm:grid-cols-2">
@@ -516,10 +768,10 @@ function Card({
   );
 }
 
-function Stat({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
+function Stat({ label, value, bold }: { label: ReactNode; value: string; bold?: boolean }) {
   return (
     <div>
-      <p className="text-xs text-zinc-500 mb-0.5">{label}</p>
+      <p className="flex items-center gap-1 text-xs text-zinc-500 mb-0.5">{label}</p>
       <p
         className={`text-sm ${bold ? 'font-semibold text-zinc-900 dark:text-zinc-100' : 'text-zinc-600 dark:text-zinc-400'}`}
       >

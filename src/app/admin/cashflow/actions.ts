@@ -3,7 +3,6 @@
 import { and, eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { auth } from '@/auth';
 import { db } from '@/db';
 import { cashIncome, cashReports, cashWithdrawals } from '@/db/schema';
 import { logActivity } from '@/lib/activity-log';
@@ -72,7 +71,7 @@ export async function submitCashReport(formData: FormData): Promise<ActionResult
   return { ok: true, data: { id: reportId } };
 }
 
-// ── Record a withdrawal (admin only) ──────────────────────────────────
+// ── Record a withdrawal (staff + admin) ────────────────────────────────
 const withdrawalSchema = z.object({
   date: z.string().min(1, 'Date is required'),
   amount: z.coerce.number().positive('Amount must be greater than 0'),
@@ -82,8 +81,6 @@ const withdrawalSchema = z.object({
 
 export async function createWithdrawal(formData: FormData): Promise<ActionResult<{ id: string }>> {
   const actorId = await requireModule('cashflow');
-  const session = await auth();
-  if (session?.user?.role !== 'admin') return { ok: false, error: 'Admin access required.' };
 
   const raw = withdrawalSchema.safeParse({
     date: formData.get('date'),

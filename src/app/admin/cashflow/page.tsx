@@ -658,13 +658,20 @@ async function StaffView({
         <p className="mt-1 text-sm text-zinc-500">{staffName} · Day-by-day cash log</p>
       </div>
 
-      {/* Log income as it comes in, side by side with the EOD report */}
-      <div className="grid gap-8 sm:grid-cols-2">
+      {/* Log income/withdrawals as they happen, side by side with the EOD report */}
+      <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
         <section className="rounded-lg border border-zinc-200 bg-blue-50/60 p-5 dark:border-zinc-800 dark:bg-blue-950/10">
           <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mb-3">
             Record cash income
           </h2>
           <IncomeForm defaultDate={today} />
+        </section>
+
+        <section className="rounded-lg border border-zinc-200 bg-rose-50/60 p-5 dark:border-zinc-800 dark:bg-rose-950/10">
+          <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mb-3">
+            Record cash withdrawal
+          </h2>
+          <WithdrawalForm defaultDate={today} />
         </section>
 
         <section className="rounded-lg border border-zinc-200 bg-zinc-50 p-5 dark:border-zinc-800 dark:bg-zinc-900/50">

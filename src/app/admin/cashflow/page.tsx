@@ -155,7 +155,7 @@ async function AdminView({ today }: { today: string; actorId: string }) {
   // separately visible; it's folded into the original (deposit) day's total.
   const sixtyDaysAgo = new Date(Date.now() - 60 * 86_400_000);
 
-  const [cashModes, dailyBookingRows, dailyReportRows] = await Promise.all([
+  const [cashModes, dailyBookingRows, dailyReportRows, dailyExpenseRows] = await Promise.all([
     db.select({ id: paymentModes.id }).from(paymentModes).where(ilike(paymentModes.name, 'cash')),
     db
       .select({
@@ -182,6 +182,10 @@ async function AdminView({ today }: { today: string; actorId: string }) {
       .from(cashReports)
       .innerJoin(users, eq(cashReports.staffId, users.id))
       .where(gte(cashReports.date, phDateStr(sixtyDaysAgo))),
+    db
+      .select({ date: expenses.spentOn, amount: expenses.amount })
+      .from(expenses)
+      .where(gte(expenses.spentOn, phDateStr(sixtyDaysAgo))),
   ]);
 
   const cashModeIds = new Set(cashModes.map((m) => m.id));
@@ -216,9 +220,18 @@ async function AdminView({ today }: { today: string; actorId: string }) {
     );
   }
 
-  // Union of dates with booking income and/or an EOD report, so a day with a
-  // report but no bookings (or vice versa) still gets a row.
-  const allDates = new Set([...dailyTotals.keys(), ...dailyReported.keys()]);
+  const dailyExpenses = new Map<string, number>();
+  for (const row of dailyExpenseRows) {
+    dailyExpenses.set(row.date, (dailyExpenses.get(row.date) ?? 0) + parseFloat(row.amount));
+  }
+
+  // Union of dates with booking income, an EOD report, and/or expenses, so a
+  // day with only one of those still gets a row.
+  const allDates = new Set([
+    ...dailyTotals.keys(),
+    ...dailyReported.keys(),
+    ...dailyExpenses.keys(),
+  ]);
 
   const dailyBreakdown = Array.from(allDates)
     .map((date) => {
@@ -227,6 +240,7 @@ async function AdminView({ today }: { today: string; actorId: string }) {
         date,
         cash,
         total,
+        expenses: dailyExpenses.get(date) ?? 0,
         reported: dailyReported.get(date) ?? null,
         notes: dailyNotes.get(date)?.join(' · ') ?? '',
       };
@@ -237,9 +251,10 @@ async function AdminView({ today }: { today: string; actorId: string }) {
     (acc, row) => ({
       cash: acc.cash + row.cash,
       total: acc.total + row.total,
+      expenses: acc.expenses + row.expenses,
       reported: acc.reported + (row.reported ?? 0),
     }),
-    { cash: 0, total: 0, reported: 0 },
+    { cash: 0, total: 0, expenses: 0, reported: 0 },
   );
 
   // 3. All staff EOD reports (last 90 days) with staff name
@@ -360,8 +375,9 @@ async function AdminView({ today }: { today: string; actorId: string }) {
           Daily booking income — cash vs. total
         </h2>
         <p className="mb-1 text-xs text-zinc-500">
-          Bucketed by the date each payment was taken. Last 60 days. "Reported EOD" is the sum of
-          staff cash counts submitted for that date; notes are pulled from those same reports.
+          Bucketed by the date each payment was taken. Last 60 days. "Expenses" is that day's
+          recorded expenses (from the Expenses module). "Reported EOD" is the sum of staff cash
+          counts submitted for that date; notes are pulled from those same reports.
         </p>
         <p className="mb-3 flex items-center gap-1.5 text-xs text-zinc-500">
           <AutoIcon /> = calculated automatically from booking data, not typed in by staff.
@@ -384,6 +400,7 @@ async function AdminView({ today }: { today: string; actorId: string }) {
                       <AutoIcon /> Total for the day
                     </span>
                   </th>
+                  <th className="pb-2 pr-4 text-right font-medium">Expenses</th>
                   <th className="pb-2 pr-4 text-right font-medium">Reported EOD</th>
                   <th className="pb-2 font-medium">Notes</th>
                 </tr>
@@ -397,6 +414,9 @@ async function AdminView({ today }: { today: string; actorId: string }) {
                     </td>
                     <td className="py-3 pr-4 text-right font-medium text-zinc-800 dark:text-zinc-200 whitespace-nowrap">
                       {fmt(row.total)}
+                    </td>
+                    <td className="py-3 pr-4 text-right font-medium text-zinc-800 dark:text-zinc-200 whitespace-nowrap">
+                      {row.expenses > 0 ? `−${fmt(row.expenses)}` : fmt(0)}
                     </td>
                     <td className="py-3 pr-4 text-right font-medium text-zinc-800 dark:text-zinc-200 whitespace-nowrap">
                       {row.reported !== null ? (
@@ -421,6 +441,11 @@ async function AdminView({ today }: { today: string; actorId: string }) {
                   </td>
                   <td className="py-3 pr-4 text-right font-semibold text-zinc-900 dark:text-zinc-100 whitespace-nowrap">
                     {fmt(dailyBreakdownTotals.total)}
+                  </td>
+                  <td className="py-3 pr-4 text-right font-semibold text-zinc-900 dark:text-zinc-100 whitespace-nowrap">
+                    {dailyBreakdownTotals.expenses > 0
+                      ? `−${fmt(dailyBreakdownTotals.expenses)}`
+                      : fmt(0)}
                   </td>
                   <td className="py-3 pr-4 text-right font-semibold text-zinc-900 dark:text-zinc-100 whitespace-nowrap">
                     {fmt(dailyBreakdownTotals.reported)}
@@ -633,17 +658,16 @@ async function StaffView({
         <p className="mt-1 text-sm text-zinc-500">{staffName} · Day-by-day cash log</p>
       </div>
 
-      {/* Log income as it comes in */}
-      <section>
-        <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mb-3">
-          Record cash income
-        </h2>
-        <IncomeForm defaultDate={today} />
-      </section>
+      {/* Log income as it comes in, side by side with the EOD report */}
+      <div className="grid gap-8 sm:grid-cols-2">
+        <section className="rounded-lg border border-zinc-200 bg-blue-50/60 p-5 dark:border-zinc-800 dark:bg-blue-950/10">
+          <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mb-3">
+            Record cash income
+          </h2>
+          <IncomeForm defaultDate={today} />
+        </section>
 
-      {/* EOD submit for today */}
-      <section>
-        <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-5 dark:border-zinc-800 dark:bg-zinc-900/50">
+        <section className="rounded-lg border border-zinc-200 bg-zinc-50 p-5 dark:border-zinc-800 dark:bg-zinc-900/50">
           <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-1">
             {today} — EOD report
           </p>
@@ -658,8 +682,8 @@ async function StaffView({
             existingAmount={todayReport?.amountReported}
             existingNotes={todayReport?.notes ?? undefined}
           />
-        </div>
-      </section>
+        </section>
+      </div>
 
       {/* Day-by-day table */}
       <section>

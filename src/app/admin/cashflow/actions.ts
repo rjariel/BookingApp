@@ -7,14 +7,9 @@ import { auth } from '@/auth';
 import { db } from '@/db';
 import { cashIncome, cashReports, cashWithdrawals } from '@/db/schema';
 import { logActivity } from '@/lib/activity-log';
+import { requireModule } from '@/lib/permissions';
 
 export type ActionResult<T = void> = { ok: true; data: T } | { ok: false; error: string };
-
-async function getActor() {
-  const session = await auth();
-  if (!session?.user?.id) return null;
-  return { id: session.user.id, role: session.user.role ?? 'staff' };
-}
 
 // ── Submit EOD cash report (staff + admin) ─────────────────────────────
 const cashReportSchema = z.object({
@@ -24,8 +19,7 @@ const cashReportSchema = z.object({
 });
 
 export async function submitCashReport(formData: FormData): Promise<ActionResult<{ id: string }>> {
-  const actor = await getActor();
-  if (!actor) return { ok: false, error: 'Not authenticated.' };
+  const actorId = await requireModule('cashflow');
 
   const raw = cashReportSchema.safeParse({
     date: formData.get('date'),
@@ -40,7 +34,7 @@ export async function submitCashReport(formData: FormData): Promise<ActionResult
   const [existing] = await db
     .select({ id: cashReports.id })
     .from(cashReports)
-    .where(and(eq(cashReports.staffId, actor.id), eq(cashReports.date, date)))
+    .where(and(eq(cashReports.staffId, actorId), eq(cashReports.date, date)))
     .limit(1);
 
   let reportId: string;
@@ -57,7 +51,7 @@ export async function submitCashReport(formData: FormData): Promise<ActionResult
       .insert(cashReports)
       .values({
         date,
-        staffId: actor.id,
+        staffId: actorId,
         amountReported: String(amountReported),
         notes: notes ?? null,
       })
@@ -67,7 +61,7 @@ export async function submitCashReport(formData: FormData): Promise<ActionResult
   }
 
   await logActivity({
-    actorId: actor.id,
+    actorId,
     action: existing ? 'update' : 'create',
     entityType: 'cash_report',
     entityId: reportId,
@@ -87,8 +81,9 @@ const withdrawalSchema = z.object({
 });
 
 export async function createWithdrawal(formData: FormData): Promise<ActionResult<{ id: string }>> {
-  const actor = await getActor();
-  if (actor?.role !== 'admin') return { ok: false, error: 'Admin access required.' };
+  const actorId = await requireModule('cashflow');
+  const session = await auth();
+  if (session?.user?.role !== 'admin') return { ok: false, error: 'Admin access required.' };
 
   const raw = withdrawalSchema.safeParse({
     date: formData.get('date'),
@@ -105,7 +100,7 @@ export async function createWithdrawal(formData: FormData): Promise<ActionResult
     .values({
       date,
       amount: String(amount),
-      withdrawnBy: actor.id,
+      withdrawnBy: actorId,
       reason,
       notes: notes ?? null,
     })
@@ -114,7 +109,7 @@ export async function createWithdrawal(formData: FormData): Promise<ActionResult
   if (!row) return { ok: false, error: 'Failed to record withdrawal.' };
 
   await logActivity({
-    actorId: actor.id,
+    actorId,
     action: 'create',
     entityType: 'cash_withdrawal',
     entityId: row.id,
@@ -134,8 +129,7 @@ const incomeSchema = z.object({
 });
 
 export async function createIncomeEntry(formData: FormData): Promise<ActionResult<{ id: string }>> {
-  const actor = await getActor();
-  if (!actor) return { ok: false, error: 'Not authenticated.' };
+  const actorId = await requireModule('cashflow');
 
   const raw = incomeSchema.safeParse({
     date: formData.get('date'),
@@ -153,7 +147,7 @@ export async function createIncomeEntry(formData: FormData): Promise<ActionResul
       date,
       amount: String(amount),
       source,
-      recordedBy: actor.id,
+      recordedBy: actorId,
       notes: notes ?? null,
     })
     .returning({ id: cashIncome.id });
@@ -161,7 +155,7 @@ export async function createIncomeEntry(formData: FormData): Promise<ActionResul
   if (!row) return { ok: false, error: 'Failed to record income.' };
 
   await logActivity({
-    actorId: actor.id,
+    actorId,
     action: 'create',
     entityType: 'cash_income',
     entityId: row.id,

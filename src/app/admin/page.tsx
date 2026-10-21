@@ -89,9 +89,9 @@ export default async function AdminDashboard({ searchParams }: Props) {
 
   return (
     <div className="space-y-8 px-4 py-8" suppressHydrationWarning>
-      {/* Header with New Booking button */}
-      <div className="flex items-start justify-between">
-        <div>
+      {/* Header with Available Slots centered between the title and the New Booking controls */}
+      <div className="flex flex-wrap items-stretch justify-between gap-6">
+        <div className="rounded-lg bg-indigo-50/60 px-4 py-3 dark:bg-indigo-950/20">
           <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Dashboard</h1>
           <p className="mt-0.5 text-sm text-zinc-500">
             {new Intl.DateTimeFormat('en-PH', {
@@ -103,7 +103,17 @@ export default async function AdminDashboard({ searchParams }: Props) {
             }).format(new Date())}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+
+        <Suspense fallback={<Skeleton className="h-16 flex-1" />}>
+          <div className="min-w-0 flex-1 rounded-lg border-l border-zinc-200 bg-emerald-50/60 px-4 py-3 pl-6 dark:border-zinc-700 dark:bg-emerald-950/10">
+            <h2 className="mb-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+              Available Slots Today
+            </h2>
+            <AvailableSlots />
+          </div>
+        </Suspense>
+
+        <div className="flex items-center gap-2 rounded-lg border-l border-zinc-200 bg-blue-50/60 px-4 py-3 pl-6 dark:border-zinc-700 dark:bg-blue-950/10">
           {!isToday && (
             <Link
               href="/admin"
@@ -127,31 +137,20 @@ export default async function AdminDashboard({ searchParams }: Props) {
         <TodaysBookings date={selectedDate} />
       </Suspense>
 
-      {/* Available slots + On Duty — two-column top section */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Suspense fallback={<Skeleton className="h-40" />}>
-          <section className="rounded-lg border border-zinc-200 bg-zinc-50 p-6 dark:border-zinc-700 dark:bg-zinc-900/30">
-            <h2 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-              Available Slots Today
-            </h2>
-            <AvailableSlots />
-          </section>
-        </Suspense>
-
-        <Suspense fallback={<Skeleton className="h-40" />}>
-          <section className="rounded-lg border border-zinc-200 bg-zinc-50 p-6 dark:border-zinc-700 dark:bg-zinc-900/30">
-            <OnDutyToday
-              today={today}
-              allStaff={allStaff}
-              currentDuty={dutyRoster.map((d) => ({
-                userId: d.userId,
-                name: d.name ?? 'Unknown',
-              }))}
-              canEdit={canEditDuty}
-            />
-          </section>
-        </Suspense>
-      </div>
+      {/* On Duty */}
+      <Suspense fallback={<Skeleton className="h-40" />}>
+        <section className="rounded-lg border border-zinc-200 bg-zinc-50 p-6 dark:border-zinc-700 dark:bg-zinc-900/30">
+          <OnDutyToday
+            today={today}
+            allStaff={allStaff}
+            currentDuty={dutyRoster.map((d) => ({
+              userId: d.userId,
+              name: d.name ?? 'Unknown',
+            }))}
+            canEdit={canEditDuty}
+          />
+        </section>
+      </Suspense>
 
       {/* Snapshot bar */}
       <Suspense fallback={<Skeleton className="h-20" />}>

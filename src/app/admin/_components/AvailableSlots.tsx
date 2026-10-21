@@ -45,22 +45,18 @@ export default async function AvailableSlots() {
 
   return (
     <div>
-      <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-400">
-        <span className="font-normal">
-          ({storeHours.openTime} – {storeHours.closeTime})
-        </span>
+      <p className="mb-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+        {storeHours.openTime} – {storeHours.closeTime}
       </p>
 
       {slots.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-zinc-200 bg-zinc-100/50 py-6 text-center dark:border-zinc-700 dark:bg-zinc-800/30">
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">No open slots remaining today.</p>
-        </div>
+        <p className="text-xs text-zinc-400 dark:text-zinc-500">No open slots remaining today.</p>
       ) : (
-        <div className="flex flex-wrap gap-3">
+        <div className="flex max-w-full flex-wrap gap-1.5">
           {slots.map((slot) => (
             <span
               key={slot.start.getTime()}
-              className="inline-flex items-center rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200"
+              className="inline-flex shrink-0 items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200 ring-inset dark:bg-emerald-950/30 dark:text-emerald-400 dark:ring-emerald-800"
             >
               {fmtTime.format(slot.start)} – {fmtTime.format(slot.end)}
             </span>

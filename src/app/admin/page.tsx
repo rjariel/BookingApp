@@ -65,11 +65,17 @@ function Skeleton({ className }: { className?: string }) {
   );
 }
 
-export default async function AdminDashboard() {
+type Props = {
+  searchParams: Promise<{ date?: string }>;
+};
+
+export default async function AdminDashboard({ searchParams }: Props) {
   await requireModule('dashboard');
   const session = await auth();
   const isAdmin = session?.user?.role === 'admin';
   const today = phDateStr();
+  const { date: dateParam } = await searchParams;
+  const selectedDate = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : today;
   const canEditDuty = await hasModule('duty');
 
   const [activityRows, allStaff, dutyRoster] = await Promise.all([
@@ -136,7 +142,7 @@ export default async function AdminDashboard() {
       {/* Two-column grid: bookings + stock */}
       <div className="grid gap-8 lg:grid-cols-2">
         <Suspense fallback={<Skeleton className="h-48" />}>
-          <TodaysBookings />
+          <TodaysBookings date={selectedDate} />
         </Suspense>
 
         <Suspense fallback={<Skeleton className="h-48" />}>

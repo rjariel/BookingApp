@@ -2,13 +2,14 @@ import { and, asc, eq, gte, lt } from 'drizzle-orm';
 import Link from 'next/link';
 import { db } from '@/db';
 import { bookings, clients, packages } from '@/db/schema';
-import { fmtPhTime, phDayBounds } from '@/lib/timezone';
+import { fmtPhDate, fmtPhTime, phDateStr, phDayBounds } from '@/lib/timezone';
 import StatusBadge from '../bookings/_components/StatusBadge';
+import DateFilter from './DateFilter';
 
 const fmtTime = fmtPhTime;
 
-async function getTodaysBookings() {
-  const { start, end } = phDayBounds();
+async function getBookingsForDate(date: string) {
+  const { start, end } = phDayBounds(new Date(`${date}T00:00:00+08:00`));
 
   return db
     .select({
@@ -29,17 +30,36 @@ async function getTodaysBookings() {
     .orderBy(asc(bookings.startsAt));
 }
 
-export default async function TodaysBookings() {
-  const rows = await getTodaysBookings();
+export default async function TodaysBookings({ date }: { date?: string } = {}) {
+  const selectedDate = date ?? phDateStr();
+  const rows = await getBookingsForDate(selectedDate);
+  const isToday = selectedDate === phDateStr();
+  const dateLabel = fmtPhDate.format(new Date(`${selectedDate}T12:00:00+08:00`));
 
   return (
     <section>
-      <h2 className="mb-3 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-        Today's bookings
-      </h2>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+          {isToday ? "Today's bookings" : `Bookings on ${dateLabel}`}{' '}
+          <span className="font-normal text-zinc-400">({rows.length})</span>
+        </h2>
+        <div className="flex items-center gap-2">
+          {!isToday && (
+            <Link
+              href="/admin"
+              className="text-xs text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
+            >
+              Today
+            </Link>
+          )}
+          <DateFilter date={selectedDate} />
+        </div>
+      </div>
       {rows.length === 0 ? (
         <div className="rounded-lg border border-dashed border-zinc-200 py-10 text-center dark:border-zinc-700">
-          <p className="text-sm text-zinc-400">No bookings scheduled for today.</p>
+          <p className="text-sm text-zinc-400">
+            No bookings scheduled {isToday ? 'for today' : `on ${dateLabel}`}.
+          </p>
         </div>
       ) : (
         <div className="divide-y divide-zinc-100 rounded-lg border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-700">

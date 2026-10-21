@@ -1,4 +1,5 @@
 import { and, desc, eq, ne } from 'drizzle-orm';
+import Link from 'next/link';
 import { Suspense } from 'react';
 import { auth } from '@/auth';
 import { db } from '@/db';
@@ -8,6 +9,7 @@ import { PH_TIMEZONE, phDateStr } from '@/lib/timezone';
 import ActivityLogTable from './_components/ActivityLogTable';
 import AdvanceBookings from './_components/AdvanceBookings';
 import AvailableSlots from './_components/AvailableSlots';
+import DateFilter from './_components/DateFilter';
 import LowStockList from './_components/LowStockList';
 import OnDutyToday from './_components/OnDutyToday';
 import SnapshotBar from './_components/SnapshotBar';
@@ -76,6 +78,7 @@ export default async function AdminDashboard({ searchParams }: Props) {
   const today = phDateStr();
   const { date: dateParam } = await searchParams;
   const selectedDate = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : today;
+  const isToday = selectedDate === today;
   const canEditDuty = await hasModule('duty');
 
   const [activityRows, allStaff, dutyRoster] = await Promise.all([
@@ -100,13 +103,29 @@ export default async function AdminDashboard({ searchParams }: Props) {
             }).format(new Date())}
           </p>
         </div>
-        <a
-          href="/admin/bookings/new"
-          className="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600"
-        >
-          + New Booking
-        </a>
+        <div className="flex items-center gap-2">
+          {!isToday && (
+            <Link
+              href="/admin"
+              className="text-xs text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
+            >
+              Today
+            </Link>
+          )}
+          <DateFilter date={selectedDate} />
+          <a
+            href="/admin/bookings/new"
+            className="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600"
+          >
+            + New Booking
+          </a>
+        </div>
       </div>
+
+      {/* Bookings for the selected date — top of the page */}
+      <Suspense fallback={<Skeleton className="h-48" />}>
+        <TodaysBookings date={selectedDate} />
+      </Suspense>
 
       {/* Available slots + On Duty — two-column top section */}
       <div className="grid gap-6 lg:grid-cols-2">
@@ -139,12 +158,8 @@ export default async function AdminDashboard({ searchParams }: Props) {
         <SnapshotBar isAdmin={isAdmin} />
       </Suspense>
 
-      {/* Two-column grid: bookings + stock */}
+      {/* Two-column grid: advance bookings + stock */}
       <div className="grid gap-8 lg:grid-cols-2">
-        <Suspense fallback={<Skeleton className="h-48" />}>
-          <TodaysBookings date={selectedDate} />
-        </Suspense>
-
         <Suspense fallback={<Skeleton className="h-48" />}>
           <AdvanceBookings />
         </Suspense>

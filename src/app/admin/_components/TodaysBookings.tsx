@@ -4,7 +4,6 @@ import { db } from '@/db';
 import { bookings, clients, packages } from '@/db/schema';
 import { fmtPhDate, fmtPhTime, phDateStr, phDayBounds } from '@/lib/timezone';
 import StatusBadge from '../bookings/_components/StatusBadge';
-import DateFilter from './DateFilter';
 
 const fmtTime = fmtPhTime;
 
@@ -38,23 +37,10 @@ export default async function TodaysBookings({ date }: { date?: string } = {}) {
 
   return (
     <section>
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-          {isToday ? "Today's bookings" : `Bookings on ${dateLabel}`}{' '}
-          <span className="font-normal text-zinc-400">({rows.length})</span>
-        </h2>
-        <div className="flex items-center gap-2">
-          {!isToday && (
-            <Link
-              href="/admin"
-              className="text-xs text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
-            >
-              Today
-            </Link>
-          )}
-          <DateFilter date={selectedDate} />
-        </div>
-      </div>
+      <h2 className="mb-3 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+        {isToday ? "Today's bookings" : `Bookings on ${dateLabel}`}{' '}
+        <span className="font-normal text-zinc-400">({rows.length})</span>
+      </h2>
       {rows.length === 0 ? (
         <div className="rounded-lg border border-dashed border-zinc-200 py-10 text-center dark:border-zinc-700">
           <p className="text-sm text-zinc-400">

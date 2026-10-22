@@ -54,6 +54,7 @@ export const stockLedgerType = pgEnum('stock_ledger_type', [
   'adjustment',
   'wastage',
 ]);
+export const cashAdvanceType = pgEnum('cash_advance_type', ['advance', 'repayment']);
 
 const timestamps = {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
@@ -335,6 +336,23 @@ export const cashIncome = pgTable('cash_income', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
+// Staff cash advances (loans) and their repayments, one ledger signed by
+// `type`. A staff member's outstanding balance = sum(advance) - sum(repayment).
+// Admin only.
+export const cashAdvances = pgTable('cash_advances', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  date: date('date').notNull(),
+  staffId: uuid('staff_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'restrict' }),
+  type: cashAdvanceType('type').notNull(),
+  amount: numeric('amount', { precision: 10, scale: 2 }).notNull(),
+  reason: text('reason'),
+  recordedBy: uuid('recorded_by').references(() => users.id, { onDelete: 'set null' }),
+  notes: text('notes'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
 // ── Auth tokens ───────────────────────────────────────────────────────
 export const passwordResetTokens = pgTable('password_reset_tokens', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -510,6 +528,11 @@ export const cashIncomeRelations = relations(cashIncome, ({ one }) => ({
   recordedByUser: one(users, { fields: [cashIncome.recordedBy], references: [users.id] }),
 }));
 
+export const cashAdvancesRelations = relations(cashAdvances, ({ one }) => ({
+  staff: one(users, { fields: [cashAdvances.staffId], references: [users.id] }),
+  recordedByUser: one(users, { fields: [cashAdvances.recordedBy], references: [users.id] }),
+}));
+
 export const employeeProfilesRelations = relations(employeeProfiles, ({ one }) => ({
   user: one(users, { fields: [employeeProfiles.userId], references: [users.id] }),
 }));
@@ -574,6 +597,8 @@ export type NewCashReport = typeof cashReports.$inferInsert;
 export type CashWithdrawal = typeof cashWithdrawals.$inferSelect;
 export type CashIncome = typeof cashIncome.$inferSelect;
 export type NewCashIncome = typeof cashIncome.$inferInsert;
+export type CashAdvance = typeof cashAdvances.$inferSelect;
+export type NewCashAdvance = typeof cashAdvances.$inferInsert;
 
 export type Role = typeof roles.$inferSelect;
 export type NewRole = typeof roles.$inferInsert;

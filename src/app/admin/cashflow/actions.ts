@@ -3,8 +3,9 @@
 import { and, eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
+import { auth } from '@/auth';
 import { db } from '@/db';
-import { cashIncome, cashReports, cashWithdrawals } from '@/db/schema';
+import { cashAdvances, cashIncome, cashReports, cashWithdrawals } from '@/db/schema';
 import { logActivity } from '@/lib/activity-log';
 import { requireModule } from '@/lib/permissions';
 
@@ -157,6 +158,62 @@ export async function createIncomeEntry(formData: FormData): Promise<ActionResul
     entityType: 'cash_income',
     entityId: row.id,
     summary: { date, amount, source },
+  });
+
+  revalidatePath('/admin/cashflow');
+  return { ok: true, data: { id: row.id } };
+}
+
+// ── Record a staff cash advance or repayment (admin only, for now) ────
+const cashAdvanceSchema = z.object({
+  date: z.string().min(1, 'Date is required'),
+  staffId: z.string().uuid('Select a staff member'),
+  type: z.enum(['advance', 'repayment']),
+  amount: z.coerce.number().positive('Amount must be greater than 0'),
+  reason: z.string().max(500).optional(),
+  notes: z.string().max(1000).optional(),
+});
+
+export async function createCashAdvanceEntry(
+  formData: FormData,
+): Promise<ActionResult<{ id: string }>> {
+  const actorId = await requireModule('cashflow');
+  const session = await auth();
+  if (session?.user?.role !== 'admin') return { ok: false, error: 'Admin access required.' };
+
+  const raw = cashAdvanceSchema.safeParse({
+    date: formData.get('date'),
+    staffId: formData.get('staffId'),
+    type: formData.get('type'),
+    amount: formData.get('amount'),
+    reason: formData.get('reason') || undefined,
+    notes: formData.get('notes') || undefined,
+  });
+  if (!raw.success) return { ok: false, error: raw.error.issues[0]?.message ?? 'Invalid input.' };
+
+  const { date, staffId, type, amount, reason, notes } = raw.data;
+
+  const [row] = await db
+    .insert(cashAdvances)
+    .values({
+      date,
+      staffId,
+      type,
+      amount: String(amount),
+      reason: reason ?? null,
+      recordedBy: actorId,
+      notes: notes ?? null,
+    })
+    .returning({ id: cashAdvances.id });
+
+  if (!row) return { ok: false, error: 'Failed to record entry.' };
+
+  await logActivity({
+    actorId,
+    action: 'create',
+    entityType: 'cash_advance',
+    entityId: row.id,
+    summary: { date, staffId, type, amount },
   });
 
   revalidatePath('/admin/cashflow');

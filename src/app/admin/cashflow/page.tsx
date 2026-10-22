@@ -1,10 +1,11 @@
-import { and, desc, eq, gte, ilike, lt, or, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, ilike, lt, ne, or, sql } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { auth } from '@/auth';
 import { db } from '@/db';
 import {
   bookings,
+  cashAdvances,
   cashIncome,
   cashReports,
   cashWithdrawals,
@@ -14,6 +15,7 @@ import {
 } from '@/db/schema';
 import { requireModule } from '@/lib/permissions';
 import { phDateStr, phDayBounds } from '@/lib/timezone';
+import CashAdvanceForm from './_components/CashAdvanceForm';
 import CashReportForm from './_components/CashReportForm';
 import IncomeForm from './_components/IncomeForm';
 import WithdrawalForm from './_components/WithdrawalForm';
@@ -316,6 +318,46 @@ async function AdminView({ today }: { today: string; actorId: string }) {
     .orderBy(desc(cashIncome.date), desc(cashIncome.createdAt))
     .limit(100);
 
+  // 7. Staff cash advances — all-time, for accurate outstanding balances
+  const [activeStaff, advanceRows] = await Promise.all([
+    db
+      .select({ id: users.id, name: users.name, email: users.email })
+      .from(users)
+      .where(and(eq(users.active, true), ne(users.role, 'client')))
+      .orderBy(users.name),
+    db
+      .select({
+        id: cashAdvances.id,
+        date: cashAdvances.date,
+        staffId: cashAdvances.staffId,
+        staffName: users.name,
+        staffEmail: users.email,
+        type: cashAdvances.type,
+        amount: cashAdvances.amount,
+        reason: cashAdvances.reason,
+        notes: cashAdvances.notes,
+      })
+      .from(cashAdvances)
+      .innerJoin(users, eq(cashAdvances.staffId, users.id))
+      .orderBy(desc(cashAdvances.date), desc(cashAdvances.createdAt)),
+  ]);
+
+  const advanceBalances = new Map<string, { name: string; advanced: number; repaid: number }>();
+  for (const row of advanceRows) {
+    const entry = advanceBalances.get(row.staffId) ?? {
+      name: row.staffName ?? row.staffEmail ?? '—',
+      advanced: 0,
+      repaid: 0,
+    };
+    const amount = parseFloat(row.amount);
+    if (row.type === 'advance') entry.advanced += amount;
+    else entry.repaid += amount;
+    advanceBalances.set(row.staffId, entry);
+  }
+  const advanceBalanceRows = Array.from(advanceBalances.values())
+    .map((b) => ({ ...b, outstanding: b.advanced - b.repaid }))
+    .sort((a, b) => b.outstanding - a.outstanding);
+
   return (
     <div className="px-4 py-8 space-y-10">
       <div>
@@ -595,6 +637,107 @@ async function AdminView({ today }: { today: string; actorId: string }) {
                     </td>
                     <td className="py-3 text-zinc-400 text-xs max-w-[160px] truncate">
                       {w.notes ?? '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {/* Staff cash advances */}
+      <section>
+        <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mb-1">
+          Staff cash advances
+        </h2>
+        <p className="mb-3 text-xs text-zinc-500">
+          Loans given to staff and their repayments. Outstanding = advanced − repaid, all-time.
+          Admin only for now.
+        </p>
+
+        {advanceBalanceRows.length > 0 && (
+          <div className="mb-6 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-zinc-200 text-left text-xs text-zinc-500 dark:border-zinc-800">
+                  <th className="pb-2 pr-4 font-medium">Staff</th>
+                  <th className="pb-2 pr-4 text-right font-medium">Advanced</th>
+                  <th className="pb-2 pr-4 text-right font-medium">Repaid</th>
+                  <th className="pb-2 text-right font-medium">Outstanding</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                {advanceBalanceRows.map((b) => (
+                  <tr key={b.name}>
+                    <td className="py-3 pr-4 text-zinc-800 dark:text-zinc-200">{b.name}</td>
+                    <td className="py-3 pr-4 text-right text-zinc-500 whitespace-nowrap">
+                      {fmt(b.advanced)}
+                    </td>
+                    <td className="py-3 pr-4 text-right text-zinc-500 whitespace-nowrap">
+                      {fmt(b.repaid)}
+                    </td>
+                    <td
+                      className={`py-3 text-right font-semibold whitespace-nowrap ${
+                        b.outstanding > 0.01
+                          ? 'text-amber-600 dark:text-amber-400'
+                          : 'text-emerald-600 dark:text-emerald-400'
+                      }`}
+                    >
+                      {fmt(b.outstanding)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div className="mb-6 max-w-md">
+          <CashAdvanceForm defaultDate={today} staffOptions={activeStaff} />
+        </div>
+
+        {advanceRows.length === 0 ? (
+          <p className="text-sm text-zinc-400">No cash advances recorded.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-zinc-200 text-left text-xs text-zinc-500 dark:border-zinc-800">
+                  <th className="pb-2 pr-4 font-medium">Date</th>
+                  <th className="pb-2 pr-4 font-medium">Staff</th>
+                  <th className="pb-2 pr-4 font-medium">Type</th>
+                  <th className="pb-2 pr-4 text-right font-medium">Amount</th>
+                  <th className="pb-2 pr-4 font-medium">Reason</th>
+                  <th className="pb-2 font-medium">Notes</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                {advanceRows.map((row) => (
+                  <tr key={row.id}>
+                    <td className="py-3 pr-4 text-zinc-500 whitespace-nowrap">{row.date}</td>
+                    <td className="py-3 pr-4 text-zinc-800 dark:text-zinc-200">
+                      {row.staffName ?? row.staffEmail ?? '—'}
+                    </td>
+                    <td className="py-3 pr-4">
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                          row.type === 'advance'
+                            ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400'
+                            : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400'
+                        }`}
+                      >
+                        {row.type === 'advance' ? 'Advance' : 'Repayment'}
+                      </span>
+                    </td>
+                    <td className="py-3 pr-4 text-right font-medium text-zinc-800 dark:text-zinc-200 whitespace-nowrap">
+                      {fmt(row.amount)}
+                    </td>
+                    <td className="py-3 pr-4 text-zinc-500 text-xs max-w-[160px] truncate">
+                      {row.reason ?? '—'}
+                    </td>
+                    <td className="py-3 text-zinc-400 text-xs max-w-[160px] truncate">
+                      {row.notes ?? '—'}
                     </td>
                   </tr>
                 ))}

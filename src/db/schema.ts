@@ -386,6 +386,12 @@ export const storeSettings = pgTable('store_settings', {
   logoUrl: text('logo_url'), // base64 data URL or remote URL
   openTime: text('open_time').notNull().default('09:00'),
   closeTime: text('close_time').notNull().default('18:00'),
+  // A real cash count as of a specific date, so "Cash in studio" is anchored
+  // to something true instead of assuming ₱0 at the start of time. Cash
+  // flow math only sums cash_income/expenses/withdrawals on or after this
+  // date, then adds this amount on top.
+  openingBalance: numeric('opening_balance', { precision: 10, scale: 2 }).notNull().default('0'),
+  openingBalanceDate: date('opening_balance_date'),
   updatedAt: timestamp('updated_at', { withTimezone: true })
     .defaultNow()
     .notNull()

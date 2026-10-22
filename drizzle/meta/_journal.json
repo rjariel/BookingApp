@@ -134,6 +134,13 @@
       "when": 1792633720981,
       "tag": "0018_right_frog_thor",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1792648488714,
+      "tag": "0019_motionless_the_executioner",
+      "breakpoints": true
     }
   ]
 }

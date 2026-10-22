@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { auth } from '@/auth';
 import { db } from '@/db';
-import { cashAdvances, cashIncome, cashReports, cashWithdrawals } from '@/db/schema';
+import { cashAdvances, cashIncome, cashReports, cashWithdrawals, storeSettings } from '@/db/schema';
 import { logActivity } from '@/lib/activity-log';
 import { requireModule } from '@/lib/permissions';
 
@@ -218,4 +218,49 @@ export async function createCashAdvanceEntry(
 
   revalidatePath('/admin/cashflow');
   return { ok: true, data: { id: row.id } };
+}
+
+// ── Set the opening cash balance (admin only) ──────────────────────────
+// Anchors "Cash in studio" to a real count as of a date, instead of
+// assuming ₱0 at the start of time. See store_settings.opening_balance*.
+const openingBalanceSchema = z.object({
+  amount: z.coerce.number().min(0, 'Amount must be 0 or greater'),
+  date: z.string().min(1, 'Date is required'),
+});
+
+export async function setOpeningBalance(formData: FormData): Promise<ActionResult> {
+  const actorId = await requireModule('cashflow');
+  const session = await auth();
+  if (session?.user?.role !== 'admin') return { ok: false, error: 'Admin access required.' };
+
+  const raw = openingBalanceSchema.safeParse({
+    amount: formData.get('amount'),
+    date: formData.get('date'),
+  });
+  if (!raw.success) return { ok: false, error: raw.error.issues[0]?.message ?? 'Invalid input.' };
+
+  const { amount, date } = raw.data;
+
+  const [existing] = await db.select({ id: storeSettings.id }).from(storeSettings).limit(1);
+
+  if (existing) {
+    await db
+      .update(storeSettings)
+      .set({ openingBalance: String(amount), openingBalanceDate: date })
+      .where(eq(storeSettings.id, existing.id));
+  } else {
+    await db
+      .insert(storeSettings)
+      .values({ openingBalance: String(amount), openingBalanceDate: date });
+  }
+
+  await logActivity({
+    actorId,
+    action: 'update',
+    entityType: 'store_settings',
+    summary: { openingBalance: amount, openingBalanceDate: date },
+  });
+
+  revalidatePath('/admin/cashflow');
+  return { ok: true, data: undefined };
 }

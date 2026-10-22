@@ -11,6 +11,7 @@ import {
   cashWithdrawals,
   expenses,
   paymentModes,
+  storeSettings,
   users,
 } from '@/db/schema';
 import { requireModule } from '@/lib/permissions';
@@ -18,6 +19,7 @@ import { phDateStr, phDayBounds } from '@/lib/timezone';
 import CashAdvanceForm from './_components/CashAdvanceForm';
 import CashReportForm from './_components/CashReportForm';
 import IncomeForm from './_components/IncomeForm';
+import OpeningBalanceForm from './_components/OpeningBalanceForm';
 import WithdrawalForm from './_components/WithdrawalForm';
 
 export const metadata = { title: 'Cash Flow' };
@@ -89,23 +91,38 @@ export default async function CashFlowPage() {
 
 // ── Admin View ─────────────────────────────────────────────────────────
 async function AdminView({ today }: { today: string; actorId: string }) {
-  // 1. Studio totals: all manually logged cash in, all expenses out, all withdrawals out
+  // 1. Studio totals: a real opening balance (if set) + cash in/expenses/
+  // withdrawals from that date forward — not assumed ₱0 at the start of time.
+  const [settingsRow] = await db
+    .select({
+      openingBalance: storeSettings.openingBalance,
+      openingBalanceDate: storeSettings.openingBalanceDate,
+    })
+    .from(storeSettings)
+    .limit(1);
+
+  const openingBalance = parseFloat(settingsRow?.openingBalance ?? '0');
+  const openingBalanceDate = settingsRow?.openingBalanceDate ?? null;
+
   const [incomeRow] = await db
     .select({ total: sql<string>`coalesce(sum(amount), 0)` })
-    .from(cashIncome);
+    .from(cashIncome)
+    .where(openingBalanceDate ? gte(cashIncome.date, openingBalanceDate) : undefined);
 
   const [expenseRow] = await db
     .select({ total: sql<string>`coalesce(sum(amount), 0)` })
-    .from(expenses);
+    .from(expenses)
+    .where(openingBalanceDate ? gte(expenses.spentOn, openingBalanceDate) : undefined);
 
   const [withdrawalRow] = await db
     .select({ total: sql<string>`coalesce(sum(amount), 0)` })
-    .from(cashWithdrawals);
+    .from(cashWithdrawals)
+    .where(openingBalanceDate ? gte(cashWithdrawals.date, openingBalanceDate) : undefined);
 
   const totalIn = parseFloat(incomeRow?.total ?? '0');
   const totalExpenses = parseFloat(expenseRow?.total ?? '0');
   const totalWithdrawn = parseFloat(withdrawalRow?.total ?? '0');
-  const studioBalance = totalIn - totalExpenses - totalWithdrawn;
+  const studioBalance = openingBalance + totalIn - totalExpenses - totalWithdrawn;
 
   // 2. Today's numbers
   const [todayIncomeRow] = await db
@@ -366,11 +383,34 @@ async function AdminView({ today }: { today: string; actorId: string }) {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <Card label="Cash in studio" value={fmt(studioBalance)} highlight />
-        <Card label="Total collected" value={fmt(totalIn)} />
-        <Card label="Total expenses" value={`−${fmt(totalExpenses)}`} dim />
-        <Card label="Total withdrawn" value={`−${fmt(totalWithdrawn)}`} dim />
+      <div>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <Card label="Cash in studio" value={fmt(studioBalance)} highlight />
+          <Card
+            label={
+              openingBalanceDate ? `Collected (since ${openingBalanceDate})` : 'Total collected'
+            }
+            value={fmt(totalIn)}
+          />
+          <Card
+            label={openingBalanceDate ? `Expenses (since ${openingBalanceDate})` : 'Total expenses'}
+            value={`−${fmt(totalExpenses)}`}
+            dim
+          />
+          <Card
+            label={
+              openingBalanceDate ? `Withdrawn (since ${openingBalanceDate})` : 'Total withdrawn'
+            }
+            value={`−${fmt(totalWithdrawn)}`}
+            dim
+          />
+        </div>
+        <div className="mt-2">
+          <OpeningBalanceForm
+            currentAmount={settingsRow?.openingBalance ?? '0'}
+            currentDate={openingBalanceDate}
+          />
+        </div>
       </div>
 
       {/* Today strip */}

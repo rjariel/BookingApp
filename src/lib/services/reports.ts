@@ -1,8 +1,17 @@
 'use server';
 
-import { and, gte, lt, sql } from 'drizzle-orm';
+import { and, eq, gte, lt, sql } from 'drizzle-orm';
 import { db } from '@/db';
-import { bookings, cashWithdrawals, employeeProfiles, expenses, packages } from '@/db/schema';
+import {
+  bookings,
+  cashReports,
+  cashWithdrawals,
+  employeeProfiles,
+  expenses,
+  expenseTypes,
+  packages,
+} from '@/db/schema';
+import { PH_TIMEZONE, phDateStr } from '@/lib/timezone';
 
 export interface ReportSummary {
   income: number;
@@ -244,5 +253,180 @@ export async function getMonthlyReport(year: number, month: number): Promise<Rep
     salaries,
     netProfit,
     forecastedIncome,
+  };
+}
+
+export interface AuditExpenseItem {
+  type: string;
+  description: string | null;
+  amount: number;
+}
+
+export interface AuditDay {
+  date: string;
+  dayNumber: number;
+  inMonth: boolean;
+  income: number;
+  expenses: number;
+  expenseItems: AuditExpenseItem[];
+  reported: number | null;
+  variance: number | null;
+}
+
+export interface MonthlyAuditCalendar {
+  year: number;
+  month: number;
+  monthLabel: string;
+  weeks: AuditDay[][];
+  totals: { income: number; expenses: number; net: number; reported: number; variance: number };
+}
+
+function pad2(n: number): string {
+  return String(n).padStart(2, '0');
+}
+
+/**
+ * Add (or subtract) whole days to a "YYYY-MM-DD" calendar date, via
+ * Date.UTC/getUTC* so it's independent of the server's local timezone.
+ */
+function addDays(dateStr: string, days: number): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const utc = new Date(Date.UTC(y ?? 0, (m ?? 1) - 1, (d ?? 1) + days));
+  return utc.toISOString().slice(0, 10);
+}
+
+/** Monday (PH calendar) of the week containing the given "YYYY-MM-DD" date. */
+function weekStartOf(dateStr: string): string {
+  // Pure calendar-date math via Date.UTC + getUTCDay — deliberately avoids
+  // the server's local timezone (Date#getDay would be correct in local dev,
+  // where Node happens to run in Asia/Manila, but wrong on Vercel, which
+  // runs serverless functions in UTC).
+  const [y, m, day] = dateStr.split('-').map(Number);
+  const utc = new Date(Date.UTC(y ?? 0, (m ?? 1) - 1, day ?? 1));
+  const dow = utc.getUTCDay(); // 0=Sun..6=Sat
+  const diffToMonday = dow === 0 ? 6 : dow - 1;
+  return addDays(dateStr, -diffToMonday);
+}
+
+/** Sunday (PH calendar) of the week containing the given "YYYY-MM-DD" date. */
+function weekEndOf(dateStr: string): string {
+  return addDays(weekStartOf(dateStr), 6);
+}
+
+/**
+ * Full-month calendar (Monday–Sunday rows, PH time) audit view. Padding
+ * days from the adjacent month fill out the first/last week (marked
+ * `inMonth: false`) so the grid is always complete rows. Income is
+ * auto-computed from bookings (packages + add-ons, any payment mode),
+ * bucketed by the date each payment was taken (`createdAt`), so an advance
+ * booking's deposit lands on the day it was paid. Expenses pulls every
+ * Expenses-module entry regardless of type, so Shopee/Lazada purchases,
+ * salary, utilities, etc. are all included, broken down per item.
+ * `variance` is Reported EOD minus Income — flagged in the UI when it's
+ * non-zero. Totals only count days within the selected month.
+ */
+export async function getMonthlyAuditCalendar(
+  year: number,
+  month: number,
+): Promise<MonthlyAuditCalendar> {
+  const monthStart = `${year}-${pad2(month)}-01`;
+  const nextMonthStart = month === 12 ? `${year + 1}-01-01` : `${year}-${pad2(month + 1)}-01`;
+  const lastOfMonth = addDays(nextMonthStart, -1);
+
+  const gridStart = weekStartOf(monthStart);
+  const gridEnd = weekEndOf(lastOfMonth);
+  const gridEndExclusive = addDays(gridEnd, 1);
+
+  const [bookingRows, expenseRows, reportRows] = await Promise.all([
+    db
+      .select({ amountPaid: bookings.amountPaid, createdAt: bookings.createdAt })
+      .from(bookings)
+      .where(
+        and(
+          sql`${bookings.status} IN ('completed','confirmed')`,
+          gte(bookings.createdAt, new Date(`${gridStart}T00:00:00+08:00`)),
+          lt(bookings.createdAt, new Date(`${gridEndExclusive}T00:00:00+08:00`)),
+        ),
+      ),
+    db
+      .select({
+        date: expenses.spentOn,
+        amount: expenses.amount,
+        description: expenses.description,
+        type: expenseTypes.name,
+      })
+      .from(expenses)
+      .innerJoin(expenseTypes, eq(expenses.expenseTypeId, expenseTypes.id))
+      .where(and(gte(expenses.spentOn, gridStart), lt(expenses.spentOn, gridEndExclusive))),
+    db
+      .select({ date: cashReports.date, amountReported: cashReports.amountReported })
+      .from(cashReports)
+      .where(and(gte(cashReports.date, gridStart), lt(cashReports.date, gridEndExclusive))),
+  ]);
+
+  const dailyIncome = new Map<string, number>();
+  const dailyExpenses = new Map<string, number>();
+  const dailyExpenseItems = new Map<string, AuditExpenseItem[]>();
+  const dailyReported = new Map<string, number>();
+
+  for (const row of bookingRows) {
+    const date = phDateStr(row.createdAt);
+    dailyIncome.set(date, (dailyIncome.get(date) ?? 0) + parseFloat(row.amountPaid));
+  }
+  for (const row of expenseRows) {
+    const amount = parseFloat(row.amount);
+    dailyExpenses.set(row.date, (dailyExpenses.get(row.date) ?? 0) + amount);
+    const items = dailyExpenseItems.get(row.date) ?? [];
+    items.push({ type: row.type, description: row.description, amount });
+    dailyExpenseItems.set(row.date, items);
+  }
+  for (const row of reportRows) {
+    dailyReported.set(
+      row.date,
+      (dailyReported.get(row.date) ?? 0) + parseFloat(row.amountReported),
+    );
+  }
+
+  const weeks: AuditDay[][] = [];
+  let cursor = gridStart;
+  while (cursor <= gridEnd) {
+    const week: AuditDay[] = [];
+    for (let i = 0; i < 7; i++) {
+      const date = cursor;
+      const income = dailyIncome.get(date) ?? 0;
+      const dayExpenses = dailyExpenses.get(date) ?? 0;
+      const reported = dailyReported.has(date) ? (dailyReported.get(date) ?? 0) : null;
+      week.push({
+        date,
+        dayNumber: Number(date.slice(8, 10)),
+        inMonth: date >= monthStart && date <= lastOfMonth,
+        income,
+        expenses: dayExpenses,
+        expenseItems: dailyExpenseItems.get(date) ?? [],
+        reported,
+        variance: reported === null ? null : reported - income,
+      });
+      cursor = addDays(cursor, 1);
+    }
+    weeks.push(week);
+  }
+
+  const monthDays = weeks.flat().filter((d) => d.inMonth);
+  const income = monthDays.reduce((sum, d) => sum + d.income, 0);
+  const exp = monthDays.reduce((sum, d) => sum + d.expenses, 0);
+  const reported = monthDays.reduce((sum, d) => sum + (d.reported ?? 0), 0);
+
+  const monthLabel = new Intl.DateTimeFormat('en-PH', {
+    timeZone: PH_TIMEZONE,
+    month: 'long',
+    year: 'numeric',
+  }).format(new Date(`${monthStart}T12:00:00+08:00`));
+
+  return {
+    year,
+    month,
+    monthLabel,
+    weeks,
+    totals: { income, expenses: exp, net: income - exp, reported, variance: reported - income },
   };
 }
